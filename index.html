@@ -1,0 +1,3626 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="dark" />
+    <meta
+      name="description"
+      content="Interactive, physics-based MRI contrast simulator: spin echo, fast spin echo, gradient echo, EPI, inversion recovery and balanced SSFP. Educational model, not for clinical use."
+    />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%230e131a%27/%3E%3Ccircle cx=%2732%27 cy=%2732%27 r=%2722%27 fill=%27none%27 stroke=%27%235cc8ff%27 stroke-width=%278%27/%3E%3Ccircle cx=%2732%27 cy=%2732%27 r=%278%27 fill=%27%23ffb454%27/%3E%3C/svg%3E"
+    />
+    <title>MRI Contrast Simulator: SE, FSE, GRE, EPI, IR, bSSFP</title>
+    <style>
+      :root {
+        --panel: rgba(18, 28, 44, 0.58);
+        --panel2: rgba(255, 255, 255, 0.07);
+        --line: rgba(255, 255, 255, 0.14);
+        --field: rgba(255, 255, 255, 0.07);
+        --tx: #eef3f9;
+        --mut: #b4c0d0;
+        --acc: #6cd0ff;
+        --warn: #ffb454;
+        --err: #ff8f8f;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        background: #070b12;
+      }
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        background:
+          radial-gradient(
+            60vw 55vh at 12% 8%,
+            rgba(40, 150, 255, 0.35),
+            transparent 70%
+          ),
+          radial-gradient(
+            55vw 60vh at 88% 18%,
+            rgba(120, 70, 255, 0.28),
+            transparent 70%
+          ),
+          radial-gradient(
+            70vw 55vh at 55% 98%,
+            rgba(0, 200, 170, 0.22),
+            transparent 70%
+          ),
+          radial-gradient(
+            40vw 40vh at 4% 88%,
+            rgba(255, 160, 60, 0.16),
+            transparent 70%
+          ),
+          radial-gradient(
+            45vw 40vh at 72% 55%,
+            rgba(255, 90, 170, 0.11),
+            transparent 70%
+          );
+      }
+      body {
+        margin: 0;
+        background: transparent;
+        color: var(--tx);
+        font:
+          15px/1.6 Inter,
+          "Segoe UI",
+          system-ui,
+          -apple-system,
+          Roboto,
+          sans-serif;
+        font-variant-numeric: tabular-nums;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+      }
+      .skip {
+        position: absolute;
+        left: -999px;
+        top: 4px;
+        background: var(--acc);
+        color: #000;
+        padding: 6px 10px;
+        border-radius: 6px;
+        z-index: 40;
+      }
+      .skip:focus {
+        left: 6px;
+      }
+      header {
+        padding: 10px 16px;
+        border-bottom: 1px solid var(--line);
+        background: var(--panel);
+      }
+      header,
+      section,
+      aside {
+        -webkit-backdrop-filter: blur(18px) saturate(150%);
+        backdrop-filter: blur(18px) saturate(150%);
+      }
+      section,
+      aside {
+        box-shadow:
+          inset 0 1px 0 rgba(255, 255, 255, 0.12),
+          0 8px 32px rgba(0, 0, 0, 0.28);
+      }
+      @supports not (
+        (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))
+      ) {
+        header,
+        section,
+        aside {
+          background: rgba(20, 30, 46, 0.94);
+        }
+      }
+      .top {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px 14px;
+        align-items: center;
+        justify-content: space-between;
+      }
+      h1 {
+        font-size: 1.3rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        margin: 0;
+        background: linear-gradient(90deg, #6cd0ff, #b69cff 55%, #ff7bd0);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+        -webkit-text-fill-color: transparent;
+      }
+      h2 {
+        font-size: 1rem;
+        font-weight: 650;
+        letter-spacing: 0.005em;
+        margin: 0 0 10px;
+        color: var(--tx);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      h2:before {
+        content: "";
+        width: 4px;
+        height: 1em;
+        background: rgb(var(--c, 108, 208, 255));
+        border-radius: 2px;
+      }
+      h3 {
+        font-size: 0.9rem;
+        margin: 10px 0 4px;
+        color: var(--acc);
+      }
+      .sub {
+        color: var(--mut);
+        font-size: 0.9rem;
+        margin-top: 2px;
+      }
+      .chip {
+        font-size: 0.78rem;
+        padding: 2px 9px;
+        border-radius: 10px;
+        border: 1px solid rgba(255, 180, 84, 0.6);
+        background: rgba(255, 180, 84, 0.1);
+        color: var(--warn);
+      }
+      .layout {
+        padding: 14px;
+      }
+      main {
+        min-width: 0;
+      }
+      .content {
+        display: grid;
+        gap: 14px;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      }
+      section {
+        --c: 108, 208, 255;
+        background:
+          linear-gradient(
+            135deg,
+            rgba(var(--c), 0.13),
+            rgba(var(--c), 0.02) 60%
+          ),
+          var(--panel);
+        border: 1px solid rgba(var(--c), 0.3);
+        border-radius: 8px;
+        padding: 14px;
+        min-width: 0;
+      }
+      .wide {
+        grid-column: 1/-1;
+      }
+      .relax-figure {
+        margin: 0;
+      }
+      .relax-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        align-items: start;
+        gap: 16px;
+      }
+      .relax-panel {
+        min-width: 0;
+      }
+      .relax-panel + .relax-panel {
+        border-left: 1px solid var(--line);
+        padding-left: 16px;
+      }
+      .relax-panel h3 {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0 0 8px;
+        color: var(--tx);
+        font-size: 0.95rem;
+      }
+      .relax-panel h3::before {
+        content: "";
+        width: 4px;
+        height: 1em;
+        flex: none;
+        border-radius: 2px;
+        background: rgb(var(--c, 108, 208, 255));
+      }
+      #sT1 { --c: 108, 208, 255; }
+      #sT2 { --c: 182, 156, 255; }
+      .relax-panel canvas {
+        width: 100%;
+      }
+      .relax-panel .note {
+        margin-top: 8px;
+      }
+      .relax-figure figcaption {
+        margin-top: 12px;
+      }
+      canvas {
+        width: 100%;
+        display: block;
+        background: rgba(6, 12, 22, 0.42);
+        border-radius: 6px;
+      }
+      .hrow {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .hrow h2 {
+        margin: 0;
+      }
+      input,
+      select {
+        font: inherit;
+        color: var(--tx);
+        background: var(--field);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 4px;
+        padding: 5px 8px;
+      }
+      button {
+        font: inherit;
+        padding: 5px 10px;
+        min-height: 30px;
+      }
+      option {
+        background: #16202e;
+        color: #eef3f9;
+      }
+      :focus-visible {
+        outline: 2px solid var(--acc);
+        outline-offset: 1px;
+      }
+      /* Floating control panel; desktop content reserves space while it is expanded. */
+      html {
+        overflow-x: hidden;
+      }
+      aside {
+        position: fixed;
+        left: 0;
+        top: 0;
+        width: min(320px, calc(100vw - 24px));
+        max-height: calc(100vh - 24px);
+        max-height: calc(100dvh - 24px);
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        border-radius: 6px;
+        background:
+          linear-gradient(
+            160deg,
+            rgba(108, 208, 255, 0.12),
+            rgba(182, 156, 255, 0.09) 55%,
+            rgba(255, 123, 208, 0.07)
+          ),
+          var(--panel);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        z-index: 30;
+      }
+      body.controls-min header {
+        padding-right: 72px;
+      }
+      @media (min-width: 1024px) {
+        body:not(.controls-min) header {
+          padding-right: 340px;
+        }
+        body:not(.controls-min) .layout {
+          padding-right: 344px;
+        }
+      }
+      @media (min-width: 1024px) and (max-width: 1199px) {
+        body:not(.controls-min) .content {
+          grid-template-columns: minmax(0, 1fr);
+        }
+      }
+      #asideIn {
+        padding: 12px 14px;
+        font-size: 13px;
+        line-height: 1.3;
+      }
+      aside button,
+      aside input,
+      aside select {
+        font-size: 1em;
+        padding: 0.25em 0.6em;
+        min-height: 44px;
+        border-radius: 0.4em;
+      }
+      .aside-h {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6em;
+        margin-bottom: 0.2em;
+        cursor: grab;
+        touch-action: none;
+        user-select: none;
+      }
+      .aside-h:active {
+        cursor: grabbing;
+      }
+      .hb {
+        display: flex;
+        gap: 0.4em;
+      } /* minimised: a round, text-free icon button (46 px) */
+      aside.min {
+        width: 46px;
+        height: 46px;
+        max-height: none;
+        overflow: hidden;
+        border-radius: 50%;
+        border: 1px solid rgba(108, 208, 255, 0.65);
+      }
+      #asideIn.min {
+        width: 46px;
+        height: 46px;
+        padding: 0;
+        overflow: hidden;
+      }
+      #asideIn.min .pbody,
+      #asideIn.min #reset,
+      #asideIn.min .aside-h b {
+        display: none;
+      }
+      #asideIn.min .aside-h {
+        margin: 0;
+        gap: 0;
+        width: 46px;
+        height: 46px;
+        justify-content: center;
+      }
+      #asideIn.min .hb {
+        display: contents;
+      }
+      #asideIn.min #minBtn {
+        width: 46px;
+        height: 46px;
+        border: 0;
+        border-radius: 50%;
+        background: transparent;
+        padding: 0;
+        font-size: 22px;
+        color: #eaf6ff;
+      }
+      #asideIn.min #minBtn svg {
+        width: 1em;
+        height: 1em;
+      }
+      .aside-h b {
+        font-size: 1.15em;
+      }
+      .aside-h button {
+        padding: 0.25em 0.7em;
+      }
+      .grp {
+        font-size: 0.78em;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--mut);
+        margin: 0.8em 0 0.25em;
+        display: flex;
+        align-items: center;
+        gap: 0.6em;
+      }
+      .seqgrid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 0.4em;
+      }
+      .seqbtn {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        text-align: left;
+        gap: 0;
+        padding: 0.35em 0.5em;
+        border-radius: 0.3em;
+        background: var(--panel2);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+      }
+      .seqbtn b {
+        font-size: 1em;
+        line-height: 1.2;
+      }
+      .seqbtn small {
+        color: var(--mut);
+        font-size: 0.8em;
+        line-height: 1.15;
+      }
+      .seqbtn {
+        --c: 108, 208, 255;
+        border-left: 3px solid rgb(var(--c));
+      }
+      .seqbtn[aria-pressed="true"] {
+        background: rgba(var(--c), 0.24);
+        border-color: rgb(var(--c));
+      }
+      .seqbtn[aria-pressed="true"] small {
+        color: #eaf6ff;
+      }
+      .seqbrief {
+        margin: 0.5em 0.1em 0;
+        color: var(--mut);
+        font-size: 0.85em;
+        min-height: 2.7em;
+        line-height: 1.35;
+      }
+      .btns {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.35em;
+      }
+      .btns button {
+        padding: 0.2em 0.7em;
+        font-size: 0.95em;
+      }
+      .btns button[aria-pressed="true"] {
+        background: rgba(108, 208, 255, 0.3);
+        color: #fff;
+        border-color: var(--acc);
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 5.4em minmax(0, 1fr) 4.8em;
+        gap: 0.5em;
+        align-items: center;
+        padding: 0.15em 0.3em;
+        border-radius: 0.5em;
+        border: 1px solid transparent;
+      }
+      .row label {
+        font-size: 0.95em;
+      }
+      .row label i,
+      .row .val {
+        font-style: normal;
+        color: var(--mut);
+        font-size: 0.8em;
+      }
+      .row.two {
+        grid-template-columns: 5.4em minmax(0, 1fr);
+      }
+      input[type="range"] {
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        -webkit-appearance: none;
+        appearance: none;
+        height: 44px;
+        min-height: 44px;
+        cursor: pointer;
+        --p: 0%;
+      }
+      input[type="range"]::-webkit-slider-runnable-track {
+        height: 0.45em;
+        border-radius: 0.3em;
+        background: linear-gradient(
+          90deg,
+          #6cd0ff,
+          #b69cff var(--p),
+          rgba(255, 255, 255, 0.2) var(--p)
+        );
+      }
+      input[type="range"]::-moz-range-track {
+        height: 0.45em;
+        border-radius: 0.3em;
+        background: rgba(255, 255, 255, 0.2);
+      }
+      input[type="range"]::-moz-range-progress {
+        height: 0.45em;
+        border-radius: 0.3em;
+        background: linear-gradient(90deg, #6cd0ff, #b69cff);
+      }
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        width: 1.25em;
+        height: 1.25em;
+        margin-top: -0.4em;
+        border-radius: 50%;
+        background: #fff;
+        border: 0.22em solid var(--acc);
+        box-shadow: 0 0 0 0 #5cc8ff44;
+        transition:
+          box-shadow 0.15s,
+          transform 0.15s;
+      }
+      input[type="range"]::-moz-range-thumb {
+        width: 0.85em;
+        height: 0.85em;
+        border-radius: 50%;
+        background: #fff;
+        border: 0.22em solid var(--acc);
+        box-shadow: 0 0 0 0 #5cc8ff44;
+        transition:
+          box-shadow 0.15s,
+          transform 0.15s;
+      }
+      input[type="range"]:hover::-webkit-slider-thumb {
+        box-shadow: 0 0 0 0.4em #5cc8ff33;
+      }
+      input[type="range"]:hover::-moz-range-thumb {
+        box-shadow: 0 0 0 0.4em #5cc8ff33;
+      }
+      input[type="range"]:active::-webkit-slider-thumb {
+        transform: scale(1.18);
+        box-shadow: 0 0 0 0.55em #5cc8ff44;
+      }
+      input[type="range"]:active::-moz-range-thumb {
+        transform: scale(1.18);
+        box-shadow: 0 0 0 0.55em #5cc8ff44;
+      }
+      input[type="range"]:focus-visible {
+        outline: none;
+      }
+      input[type="range"]:focus-visible::-webkit-slider-thumb {
+        box-shadow: 0 0 0 0.45em #ffb45466;
+      }
+      input[type="range"]:focus-visible::-moz-range-thumb {
+        box-shadow: 0 0 0 0.45em #ffb45466;
+      }
+      .row:hover {
+        background: rgba(255, 255, 255, 0.05);
+      }
+      .row label {
+        cursor: help;
+      }
+      .row input[type="number"] {
+        -moz-appearance: textfield;
+      }
+      .row input[type="number"]::-webkit-inner-spin-button,
+      .row input[type="number"]::-webkit-outer-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      .row input[type="number"] {
+        text-align: right;
+        width: 100%;
+        min-width: 0;
+        min-height: 44px;
+      }
+      .row select {
+        width: 100%;
+        min-width: 0;
+      }
+      .err {
+        color: var(--err);
+        font-size: 0.85em;
+        min-height: 2.4em;
+        margin-top: 0.4em;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 0.85rem;
+      }
+      td,
+      th {
+        border-bottom: 1px solid var(--line);
+        padding: 4px 6px;
+        text-align: right;
+      }
+      th:first-child,
+      td:first-child {
+        text-align: left;
+      }
+      th {
+        color: var(--mut);
+        font-weight: 600;
+      }
+      .sw {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 2px;
+        margin-right: 6px;
+      }
+      .bar {
+        display: inline-block;
+        width: 56px;
+        height: 7px;
+        background: rgba(255, 255, 255, 0.12);
+        border-radius: 4px;
+        margin-right: 6px;
+        vertical-align: middle;
+        overflow: hidden;
+      }
+      .bar i {
+        display: block;
+        height: 100%;
+      }
+      .note {
+        color: var(--mut);
+        font-size: 0.86rem;
+        line-height: 1.5;
+      }
+      .math {
+        font-family: Georgia, serif;
+        font-size: 1.02rem;
+        background: rgba(0, 0, 0, 0.28);
+        padding: 6px 10px;
+        border-radius: 8px;
+        margin: 6px 0;
+        overflow-x: auto;
+      }
+      .phlow {
+        margin-top: 14px;
+        overflow-x: auto;
+      }
+      .phbox {
+        text-align: center;
+      }
+      .phbox canvas {
+        width: min(100%, 70vh);
+        margin: 0 auto;
+        aspect-ratio: 1 / 1;
+        touch-action: manipulation;
+      }
+      #tissTbl small {
+        color: var(--muted, #a3b0c0);
+        font-size: 0.8em;
+      }
+      .phbox small {
+        display: block;
+        color: var(--mut);
+        margin-top: 6px;
+      }
+      li {
+        margin: 3px 0;
+      }
+      a {
+        color: var(--acc);
+      }
+
+      /* buttons: translucent glass fill with a hairline border; still flat (no gradient, shadow, lift or pill shape) */
+      button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5em;
+        font-weight: 600;
+        cursor: pointer;
+        user-select: none;
+        color: var(--tx);
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        border-radius: 6px;
+        transition:
+          background 0.12s,
+          border-color 0.12s,
+          color 0.12s;
+      }
+      button:hover {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: var(--acc);
+      }
+      button:active {
+        background: rgba(255, 255, 255, 0.22);
+      }
+      button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        background: rgba(255, 255, 255, 0.04);
+        border-color: var(--line);
+      }
+      button svg {
+        width: 1.05em;
+        height: 1.05em;
+        flex: none;
+      }
+      button.ghost {
+        background: transparent;
+        color: var(--mut);
+      }
+      button.ghost:hover {
+        color: var(--tx);
+        background: rgba(255, 255, 255, 0.1);
+      }
+      #pause[aria-pressed="true"] {
+        background: rgba(255, 180, 84, 0.22);
+        border-color: var(--warn);
+        color: #ffe9c9;
+      }
+      .btns button[aria-pressed="true"]::before {
+        content: "✓";
+        font-weight: 700;
+      }
+      .seqbtn {
+        font-weight: 400;
+      }
+      .seqbtn b {
+        font-weight: 650;
+      }
+      .anim {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .anim button {
+        min-height: 44px;
+      }
+      .anim label,
+      .anim span {
+        color: var(--mut);
+        font-size: 0.85rem;
+      }
+      .anim input[type="range"] {
+        width: clamp(90px, 18vw, 160px);
+      }
+      .anim span {
+        min-width: 2.6em;
+      }
+      footer {
+        margin: 6px 14px 18px;
+        padding-top: 12px;
+        border-top: 1px solid var(--line);
+        text-align: center;
+        color: var(--mut);
+        font-size: 0.9rem;
+      }
+      footer b {
+        color: var(--tx);
+        font-weight: 650;
+      }
+      #sPhantom {
+        --c: 255, 180, 84;
+      }
+      #sT1 {
+        --c: 108, 208, 255;
+      }
+      #sT2 {
+        --c: 182, 156, 255;
+      }
+      #sSeq {
+        --c: 94, 230, 176;
+      }
+      #sSrc {
+        --c: 255, 123, 208;
+      }
+      #phA {
+        cursor: pointer;
+      }
+      tr[data-k] {
+        cursor: pointer;
+      }
+      tr[data-k]:hover td {
+        background: rgba(255, 255, 255, 0.06);
+      }
+      tr.hl td {
+        background: rgba(var(--c), 0.18);
+        font-weight: 650;
+      }
+      .tissue-select {
+        min-height: 44px;
+        padding: 0 4px;
+        justify-content: flex-start;
+        background: transparent;
+        border-color: transparent;
+        color: inherit;
+        font: inherit;
+        font-weight: inherit;
+      }
+      .tissue-select:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: transparent;
+      }
+      .tissue-select[aria-pressed="true"] {
+        font-weight: 700;
+      }
+      .tissue-select:focus-visible {
+        outline: 2px solid var(--acc);
+        outline-offset: -2px;
+      }
+      /* responsive: two columns on wide screens, one column on tablets and phones */
+      @media (max-width: 860px) {
+        .content {
+          grid-template-columns: minmax(0, 1fr);
+        }
+        .hrow {
+          flex-wrap: wrap;
+        }
+      }
+      @media (max-width: 640px) {
+        .relax-grid {
+          grid-template-columns: minmax(0, 1fr);
+          gap: 18px;
+        }
+        .relax-panel + .relax-panel {
+          border-left: 0;
+          border-top: 1px solid var(--line);
+          padding-left: 0;
+          padding-top: 16px;
+        }
+        body {
+          font-size: 14px;
+        }
+        .layout {
+          padding: 8px;
+        }
+        header {
+          padding: 8px 10px;
+        }
+        section {
+          padding: 10px;
+        }
+        h1 {
+          font-size: 1.1rem;
+        }
+        .sub {
+          font-size: 0.82rem;
+        }
+        #asideIn {
+          font-size: 14px;
+        }
+        .anim {
+          flex-wrap: wrap;
+        }
+        footer {
+          margin: 6px 8px 14px;
+        }
+        .note {
+          font-size: 0.82rem;
+        }
+        aside input,
+        aside select {
+          font-size: 16px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          scroll-behavior: auto !important;
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+        }
+      }
+      @media (hover: none) {
+        .row label {
+          cursor: default;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to simulator</a>
+    <noscript
+      ><p style="padding: 16px; color: #ffb454">
+        This simulator needs JavaScript. Please enable it and reload.
+      </p></noscript
+    >
+    <aside id="sCtl" aria-label="Controls">
+      <div id="asideIn">
+        <div class="aside-h" id="panelHead" title="Drag to move the panel">
+          <b>Controls</b
+          ><span class="hb"
+            ><button
+              id="reset"
+              type="button"
+              class="ghost"
+              title="Reset sequence, settings and field strength"
+            >
+              <svg
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M2.5 8a5.5 5.5 0 1 0 1.8-4.1" />
+                <path d="M2.5 2.5v3.2h3.2" /></svg
+              ><span>Reset all</span></button
+            ><button
+              id="minBtn"
+              type="button"
+              class="ghost"
+              aria-expanded="true"
+              aria-controls="pbody"
+              title="Minimise the controls"
+            >
+              <svg
+                viewBox="0 0 16 16"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.9"
+                stroke-linecap="round"
+                aria-hidden="true"
+              >
+                <path d="M3 8h10" />
+              </svg></button
+          ></span>
+        </div>
+        <div class="pbody" id="pbody">
+          <div class="grp">Field strength (B0)</div>
+          <div
+            class="btns"
+            id="fieldBtns"
+            role="group"
+            aria-label="Main magnetic field strength"
+            title="Sets the T1 and T2 of white matter, grey matter, CSF and fat (see the tissue table for which values are sourced)"
+          ></div>
+          <div class="grp">Sequence</div>
+          <div
+            id="seqGrid"
+            class="seqgrid"
+            role="group"
+            aria-label="Pulse sequence"
+          ></div>
+          <p class="seqbrief" id="seqBrief" aria-live="polite"></p>
+          <div class="grp">Preset</div>
+          <div
+            class="btns"
+            id="presetBtns"
+            role="group"
+            aria-label="Presets"
+          ></div>
+          <div class="grp">Acquisition</div>
+          <div id="params"></div>
+          <div class="grp">Custom tissue</div>
+          <div id="custom"></div>
+          <div class="err" id="err" role="alert" aria-live="assertive"></div>
+        </div>
+      </div>
+    </aside>
+    <header>
+      <div class="top">
+        <h1>MRI Contrast Simulator</h1>
+        <span class="chip"
+          >Educational model · not a real scan · not for clinical use</span
+        >
+      </div>
+      <div class="sub">
+        See how TR, TE, TI and flip angle change tissue contrast in idealised
+        models of six MRI sequences. The combined relaxation figure compares
+        longitudinal recovery with transverse decay. Use the floating panel to
+        change settings, or minimise it.
+      </div>
+    </header>
+    <div class="layout">
+      <main id="main" class="content">
+        <section id="sPhantom" class="wide">
+          <h2>Simulated tissue phantom</h2>
+          <div class="phbox">
+            <canvas
+              id="phA"
+              width="720"
+              height="720"
+              role="img"
+              aria-label="Simulated tissue phantom: brightness of white matter, grey matter, CSF and fat for the current settings. Click a region to highlight that tissue."
+            ></canvas>
+            <p class="note">
+              Simulated phantom, <b>not a real MRI scan</b>.
+              <b>Click a region</b> (or a table row) to highlight that tissue in
+              the plots and timing diagram; hover for its values. Brightness is
+              auto-windowed (the brightest region is white), so read absolute
+              values in the table. The small circle is the custom tissue.
+            </p>
+          </div>
+          <div class="phlow"><div id="sigTable"></div></div>
+        </section>
+        <section class="wide" id="sRelax">
+          <h2>Relaxation and signal evolution</h2>
+          <figure class="relax-figure" aria-label="Two-panel figure showing longitudinal recovery and transverse decay">
+            <div class="relax-grid">
+              <div class="relax-panel" id="sT1">
+                <h3 id="h1t">T1 recovery</h3>
+                <canvas
+                  id="cT1"
+                  width="520"
+                  height="300"
+                  data-narrow=".75"
+                  role="img"
+                  aria-describedby="t1Info"
+                  aria-label="Longitudinal magnetisation curves for the selected sequence and tissue set"
+                ></canvas>
+                <div class="note" id="t1Info"></div>
+              </div>
+              <div class="relax-panel" id="sT2">
+                <h3 id="h2t">T2 decay</h3>
+                <canvas
+                  id="cT2"
+                  width="520"
+                  height="300"
+                  data-narrow=".75"
+                  role="img"
+                  aria-describedby="t2Info"
+                  aria-label="Transverse magnetisation or echo decay curves for the selected sequence and tissue set"
+                ></canvas>
+                <div class="note" id="t2Info"></div>
+              </div>
+            </div>
+            <figcaption class="note">Left: longitudinal magnetisation or sequence-specific recovery. Right: transverse magnetisation, T2/T2* decay, or the sequence-specific echo train. Both panels use the same selected tissue and acquisition settings.</figcaption>
+          </figure>
+        </section>
+        <section class="wide" id="sSeq">
+          <div class="hrow">
+            <h2>Pulse-sequence timing</h2>
+            <div class="anim">
+              <label
+                for="speed"
+                title="Speed of the moving cursor in the plots and timing diagram"
+                >Speed</label
+              ><input
+                type="range"
+                id="speed"
+                min="0.1"
+                max="3"
+                step="0.1"
+                value="1"
+                aria-label="Animation speed"
+              /><span id="speedV">1.0×</span
+              ><button
+                id="pause"
+                type="button"
+                aria-pressed="false"
+                title="Pause or resume the animation"
+              >
+                <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <rect x="3" y="2" width="4" height="12" rx="1" />
+                  <rect x="9" y="2" width="4" height="12" rx="1" /></svg
+                ><span>Pause animation</span>
+              </button>
+            </div>
+          </div>
+          <canvas
+            id="cSeq"
+            width="1000"
+            height="440"
+            data-narrow="1"
+            role="img"
+            aria-describedby="seqInfo"
+            aria-label="Pulse-sequence timing diagram with RF, slice, phase and read-out gradients and the signal"
+          ></canvas>
+          <div class="note">
+            <b>RF</b> radio-frequency pulses · <b>Gss</b> slice-select ·
+            <b>Gpe</b> phase-encode (stepped lines = amplitude changes each TR
+            or echo) · <b>Gro</b> read-out (frequency-encode) · green bar =
+            signal sampling (ADC) · <b style="color: #ffb454">//</b> = break in
+            the time axis (same scale in every segment, so TE, the read-out and
+            TR stay visible). Shapes are schematic, but gradient areas follow
+            the physics: for example the read-out pre-phaser has half the
+            read-out area. Echo heights follow the model decay (T2 or T2*),
+            scaled so the signal right after excitation is full height.
+            <b>Animation:</b> every cursor moves at constant speed and all
+            restart together each cycle (6 s at 1× speed). The T1 cursor runs
+            over 0…TR, the T2 cursor over its own time axis (the first echo
+            window), and the white cursor here runs at constant speed along the
+            drawn axis, with the time at the cursor shown as t. The
+            ms-per-second rate of the two plot cursors is given under each plot.
+          </div>
+          <div class="note" id="seqInfo"></div>
+        </section>
+        <section class="wide" id="sSrc">
+          <h2>Model, assumptions and sources</h2>
+          <div id="eqBox"></div>
+          <div class="math">
+            M<sub>z</sub>(t) = M<sub>0</sub>(1 − e<sup>−t/T1</sup>) &nbsp;&nbsp;
+            M<sub>xy</sub>(t) = M<sub>xy</sub>(0) e<sup>−t/T2</sup>
+          </div>
+          <p>
+            <b>Common assumptions:</b> ideal RF pulses, single-exponential
+            relaxation, tissue at steady state over repeated TRs, all times in
+            ms. <b>Neglected:</b> noise, flow, diffusion, magnetisation
+            transfer, B1/B0 inhomogeneity (except through T2′), partial-volume
+            and k-space effects. Each equation applies only to its own sequence.
+            For SE, FSE and IR the T2 curve is the envelope of the echo
+            amplitudes.
+          </p>
+          <h3>Tissue parameters used</h3>
+          <div style="overflow-x: auto"><table id="tissTbl"></table></div>
+          <p>
+            <b>About these values.</b> <b>Sourced:</b> T1 of white matter and
+            grey matter at 1.5, 3 and 7 T are the MPRAGE results of Wright et al.
+            2008 (four healthy subjects, mean ± SD as printed in the abstract);
+            CSF T1 is 4.3 ± 0.2 s from Rooney et al. 2007, which did not find a
+            field dependence for ventricular CSF. These two studies use different
+            methods and tissue definitions, and other studies report different
+            values (for example Wansapura et al. 1999 give 832 ms for white matter
+            and 1331 ms for grey matter at 3 T, noticeably lower for grey matter
+            than the 1607 ms used here), so the T1 values carry a method
+            uncertainty beyond the printed SD. <b>Not sourced (illustrative):</b>
+            all T2 values, fat T1, and every proton density. No in-vivo T2 values
+            at the three fields could be verified for this revision; the 3 T
+            white-matter and grey-matter T2 values that were present before are
+            kept as illustrative because the Wansapura abstract text assigns 80 ms
+            to grey matter and 110 ms to white matter, which is the reverse of the
+            order used here and could not be reconciled from the abstract alone.
+            Tissue-specific T2′ could not be justified from the sources found, so
+            one illustrative T2′ is still applied to all tissues. T2′ is a
+            relaxation <i>time constant</i>; R2′ = 1/T2′ and R2* = R2 + R2′.
+            Proton densities are relative assumptions (CSF = 1). Bibliographic
+            details of the entries marked "carried over" below are unchanged from
+            the previous version of this page and were not re-verified.
+          </p>
+          <h3>Sources</h3>
+          <ul>
+            <li>
+              Wright PJ, Mougin OE, Totman JJ, et al. Water proton T1
+              measurements in brain tissue at 7, 3, and 1.5 T using IR-EPI, IR-TSE,
+              and MPRAGE: results and optimization. MAGMA 2008;21:121-130.
+              <a href="https://doi.org/10.1007/s10334-008-0104-8" target="_blank" rel="noopener noreferrer">doi:10.1007/s10334-008-0104-8</a>.
+              <b>In-vivo</b>; source of the white-matter and grey-matter T1 values
+              (MPRAGE: WM 646 ± 32, 838 ± 50, 1126 ± 97 ms and GM 1197 ± 134, 1607 ± 112,
+              1939 ± 149 ms at 1.5, 3, 7 T; four subjects). The paper also reports
+              that IR-TSE tended to underestimate T1 in vivo.
+            </li>
+            <li>
+              Wansapura JP, Holland SK, Dunn RS, Ball WS. NMR relaxation times in the
+              human brain at 3.0 tesla. J Magn Reson Imaging 1999;9:531-538.
+              <a href="https://doi.org/10.1002/(SICI)1522-2586(199904)9:4&lt;531::AID-JMRI4&gt;3.0.CO;2-L" target="_blank" rel="noopener noreferrer">doi:10.1002/(SICI)1522-2586(199904)9:4&lt;531::AID-JMRI4&gt;3.0.CO;2-L</a>.
+              <b>In-vivo</b>, 3 T; used for comparison only (see the note above on its T2 values).
+            </li>
+            <li>
+              Weigel M. Extended phase graphs: dephasing, RF pulses, and echoes - pure
+              and simple. J Magn Reson Imaging 2015;41:266-295.
+              <a href="https://doi.org/10.1002/jmri.24619" target="_blank" rel="noopener noreferrer">doi:10.1002/jmri.24619</a>.
+              Formalism and RF matrix used for the FSE echo train. Hennig J.
+              Multiecho imaging sequences with low refocusing flip angles.
+              J Magn Reson 1988;78:397-407 (citation taken from a reference list; DOI not verified).
+            </li>
+            <li>
+              (carried over) Stanisz GJ et al. T1, T2 relaxation and magnetization transfer in
+              tissue at 3T. Magn Reson Med 2005;54:507-512.
+              <a
+                href="https://doi.org/10.1002/mrm.20605"
+                target="_blank"
+                rel="noopener noreferrer"
+                >doi:10.1002/mrm.20605</a
+              >. <b>In-vitro</b> measurements at 3 T and 37 °C in mouse, rat,
+              bovine and human-blood samples; not an in-vivo human-brain
+              reference dataset.
+            </li>
+            <li>
+              (carried over) Bojorquez JZ et al. What are normal relaxation times of tissues at
+              3 T? Magn Reson Imaging 2017;35:69-80.
+              <a
+                href="https://doi.org/10.1016/j.mri.2016.08.021"
+                target="_blank"
+                rel="noopener noreferrer"
+                >doi:10.1016/j.mri.2016.08.021</a
+              >. Review reporting substantial variation across published tissue
+              relaxation measurements; not a single definitive parameter table.
+            </li>
+            <li>
+              Rooney WD et al. Magnetic field and tissue dependencies of human
+              brain longitudinal 1H2O relaxation in vivo. Magn Reson Med
+              2007;57:308-318.
+              <a
+                href="https://doi.org/10.1002/mrm.21122"
+                target="_blank"
+                rel="noopener noreferrer"
+                >doi:10.1002/mrm.21122</a
+              >. <b>In-vivo</b> T1 measurements in three healthy individuals at
+              0.2, 1.0, 1.5, 4.0 and 7.0 T; used here for the CSF T1 (4.3 ± 0.2 s, field-independent). It does not provide a complete
+              in-vivo T1/T2 dataset for all simulator tissues.
+            </li>
+            <li>
+              Brown RW, Cheng Y.-C.N., Haacke EM, Thompson MR, Venkatesan R.
+              <i
+                >Magnetic Resonance Imaging: Physical Principles and Sequence
+                Design</i
+              >, 2nd ed. Wiley-Blackwell, 2014.
+              <a
+                href="https://doi.org/10.1002/9781118633953"
+                target="_blank"
+                rel="noopener noreferrer"
+                >doi:10.1002/9781118633953</a
+              >. General MRI physics and sequence-design reference.
+            </li>
+            <li>
+              Bernstein MA, King KF, Zhou XJ.
+              <i>Handbook of MRI Pulse Sequences</i>, 1st ed. Academic Press,
+              2004.
+              <a
+                href="https://doi.org/10.1016/B978-0-12-092861-3.X5000-6"
+                target="_blank"
+                rel="noopener noreferrer"
+                >doi:10.1016/B978-0-12-092861-3.X5000-6</a
+              >. General pulse-sequence reference.
+            </li>
+            <li>
+              <b
+                >Historical sequence references not bibliographically verified
+                here:</b
+              >
+              Hennig et al. (RARE/FSE, 1986); Haase et al. (FLASH, 1986);
+              Mansfield (EPI, 1977); Scheffler and Lehnhardt (bSSFP, 2003).
+              Volume, issue, pages and DOI are not verified in this file; do not
+              cite this line as a complete bibliography.
+            </li>
+          </ul>
+        </section>
+      </main>
+    </div>
+    <footer>Created by <b>AmirHossein Mahmoudi</b></footer>
+    <script>
+"use strict";
+// CORE-START (src/physics.js, inlined verbatim; imported by the automated tests)
+// MRI contrast simulator: physics core. Pure functions, no DOM access.
+// Times in ms, angles in degrees, magnetisation normalised to M0 = 1 (proton density rho multiplies signals).
+// The same text is inlined into magres.html (between CORE-START / CORE-END) and imported by the tests.
+const MRI = (() => {
+  "use strict";
+  const D2R = Math.PI / 180;
+
+  // ---------------------------------------------------------------------------
+  // Parameter ranges and presets (shared by the UI and the tests)
+  // ---------------------------------------------------------------------------
+  const BASE = {
+    tr: [50, 10000, 50],
+    te: [5, 500, 5],
+    ti: [50, 4000, 10],
+    fa: [1, 90, 1],
+    etl: [1, 128, 1],
+    esp: [1, 30, 1],
+    ra: [30, 180, 5], // FSE refocusing flip angle of the first echo (deg)
+    rb: [30, 180, 5], // FSE refocusing flip angle of the last echo (deg)
+    tp: [20, 500, 10],
+    t1: [50, 6000, 10],
+    t2: [5, 3000, 5],
+    pd: [0.01, 1.5, 0.01],
+  };
+  const SEQ_RANGES = {
+    se: {},
+    fse: { esp: [5, 30, 1], etl: [2, 64, 1] },
+    gre: { tr: [5, 1000, 5], te: [1, 60, 1] },
+    epi: {
+      tr: [200, 10000, 100],
+      te: [5, 150, 1],
+      fa: [10, 90, 1],
+      etl: [8, 128, 1],
+      esp: [0.2, 2, 0.1],
+    },
+    ir: { tr: [500, 12000, 100], te: [5, 300, 5] },
+    bssfp: { tr: [2, 20, 1] },
+  };
+  const PRESETS = {
+    se: [
+      { n: "T1w", tr: 500, te: 15 },
+      { n: "T2w", tr: 4000, te: 100 },
+      { n: "PD", tr: 4000, te: 15 },
+      { n: "Neutral", tr: 2000, te: 50 },
+    ],
+    fse: [
+      { n: "T1w", tr: 600, te: 10, etl: 4, esp: 10 },
+      { n: "T2w", tr: 4000, te: 100, etl: 16, esp: 10 },
+      { n: "PD", tr: 4000, te: 20, etl: 8, esp: 10 },
+    ],
+    gre: [
+      { n: "T1w", tr: 150, te: 4, fa: 70, tp: 100 },
+      { n: "T2*w", tr: 500, te: 25, fa: 20, tp: 100 },
+      { n: "PD", tr: 500, te: 4, fa: 20, tp: 100 },
+    ],
+    epi: [
+      { n: "T1w", tr: 400, te: 20, fa: 90, etl: 64, esp: 0.5, tp: 100 },
+      { n: "T2*w", tr: 2000, te: 40, fa: 90, etl: 64, esp: 0.5, tp: 100 },
+      { n: "PD", tr: 4000, te: 20, fa: 90, etl: 64, esp: 0.5, tp: 100 },
+    ],
+    ir: [
+      { n: "T1w", tr: 3000, te: 15, ti: 400 },
+      { n: "FLAIR", tr: 9000, te: 100, ti: 2400 },
+      { n: "STIR", tr: 5000, te: 50, ti: 260 },
+    ],
+    bssfp: [
+      { n: "T2/T1 60°", tr: 5, fa: 60 },
+      { n: "T2/T1 30°", tr: 5, fa: 30 },
+      { n: "PD 10°", tr: 5, fa: 10 },
+    ],
+  };
+  // Defaults for parameters a sequence does not expose
+  const PARAM_DEFAULTS = { ti: 400, fa: 30, etl: 8, esp: 10, tp: 100, ra: 180, rb: 180 };
+  function rangeOf(k, q) {
+    const r = (SEQ_RANGES[q] || {})[k] || BASE[k];
+    return { min: r[0], max: r[1], step: r[2] };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Basic relaxation and steady-state expressions
+  // ---------------------------------------------------------------------------
+  function t2star(t2, tp) {
+    return 1 / (1 / t2 + 1 / tp);
+  } // 1/T2* = 1/T2 + 1/T2'
+  function mxy(m0, t2, t) {
+    return m0 * Math.exp(-t / t2);
+  }
+  // Mz (M0 = 1) just before the next 90 deg pulse. A 90 deg pulse sets Mz to 0 at t = 0; each ideal 180 deg
+  // pulse (times in p180, ms after the 90) inverts Mz; between pulses Mz recovers with T1 towards 1.
+  function mzBefore90(t1, tr, p180) {
+    let m = 0,
+      t = 0;
+    for (const x of p180) {
+      m = 1 - (1 - m) * Math.exp(-(x - t) / t1);
+      m = -m;
+      t = x;
+    }
+    return 1 - (1 - m) * Math.exp(-(tr - t) / t1);
+  }
+  function fseEchoTime(echoIndex, esp, etl) {
+    if (
+      !Number.isInteger(echoIndex) ||
+      echoIndex < 1 ||
+      echoIndex > etl ||
+      !Number.isFinite(esp) ||
+      esp <= 0
+    )
+      throw new RangeError(
+        "FSE echo index must be an integer from 1 to ETL and ESP must be positive.",
+      );
+    return echoIndex * esp;
+  }
+  // On-resonance bSSFP steady state (alternating RF phase, ideal): transverse magnitude a and Mz z just after the pulse,
+  // Mz zz just before it. From a = zz sin(al)/(1 + E2 cos(al)), zz = E1 z + 1 - E1, z = E2 a sin(al) + zz cos(al).
+  function bssfpSteady(t1, t2, tr, fa) {
+    const E1 = Math.exp(-tr / t1), E2 = Math.exp(-tr / t2), c = Math.cos(fa * D2R), s = Math.sin(fa * D2R),
+      D = 1 - (E1 - E2) * c - E1 * E2,
+      zz = ((1 - E1) * (1 + E2 * c)) / D,
+      a = ((1 - E1) * s) / D,
+      z = E2 * a * s + zz * c;
+    return { mzBefore: zz, mzAfter: z, mxyAfter: a };
+  }
+  function spoiledGreMz(rho, t1, tr, fa) {
+    const E1 = Math.exp(-tr / t1),
+      a = fa * D2R;
+    return (rho * (1 - E1)) / (1 - Math.cos(a) * E1);
+  }
+  // Ideal 180 deg pulse times (ms after excitation) for the spin-echo family
+  function pulses180(q, p) {
+    if (q === "fse") {
+      const a = [];
+      for (let i = 1; i <= p.etl; i++) a.push((i - 0.5) * p.esp);
+      return a;
+    }
+    return [p.te / 2];
+  }
+
+  // ---------------------------------------------------------------------------
+  // Extended phase graph (EPG) for FSE/TSE (Hennig 1988; formalism and matrices as in Weigel, JMRI 2015;41:266-295).
+  // State per order k >= 0: F+_k, F-_k (stored as conj(F_-k)), Z_k.  M0 = 1.
+  // Step per echo spacing: relax(ESP/2), dephase +1, RF(alpha_i, phase 0), dephase +1, relax(ESP/2); echo = F+_0.
+  // Excitation is a 90 deg pulse with phase 90 deg relative to the refocusing pulses (CPMG condition).
+  // Assumptions: perfect spoiling of all transverse and Z_k (k>0) states at the end of each TR, hard pulses
+  // (no slice profile, no B1 error), no diffusion, no magnetisation transfer, no off-resonance.
+  // ---------------------------------------------------------------------------
+  function epgRf(S, alpha, phi) {
+    const c = Math.cos(alpha),
+      s = Math.sin(alpha),
+      c2 = Math.cos(alpha / 2) ** 2,
+      s2 = Math.sin(alpha / 2) ** 2,
+      cp = Math.cos(phi),
+      sp = Math.sin(phi),
+      c2p = Math.cos(2 * phi),
+      s2p = Math.sin(2 * phi);
+    for (let k = 0; k < S.n; k++) {
+      const ar = S.fpr[k], ai = S.fpi[k], br = S.fmr[k], bi = S.fmi[k], zr = S.zr[k], zi = S.zi[k];
+      // row 1: c2*Fp + e^{2i phi} s2*Fm - i e^{i phi} sin(a) Z
+      // -i e^{i phi} = sin(phi) - i cos(phi)
+      S.fpr[k] = c2 * ar + s2 * (c2p * br - s2p * bi) + s * (sp * zr + cp * zi);
+      S.fpi[k] = c2 * ai + s2 * (c2p * bi + s2p * br) + s * (sp * zi - cp * zr);
+      // row 2: e^{-2i phi} s2*Fp + c2*Fm + i e^{-i phi} sin(a) Z ;  i e^{-i phi} = sin(phi) + i cos(phi)
+      S.fmr[k] = s2 * (c2p * ar + s2p * ai) + c2 * br + s * (sp * zr - cp * zi);
+      S.fmi[k] = s2 * (c2p * ai - s2p * ar) + c2 * bi + s * (sp * zi + cp * zr);
+      // row 3: -i/2 e^{-i phi} sin(a) Fp + i/2 e^{i phi} sin(a) Fm + cos(a) Z
+      //  -i e^{-i phi} = -sin(phi) - i cos(phi);   i e^{i phi} = -sin(phi) + i cos(phi)
+      S.zr[k] = 0.5 * s * (-sp * ar + cp * ai - sp * br - cp * bi) + c * zr;
+      S.zi[k] = 0.5 * s * (-cp * ar - sp * ai + cp * br - sp * bi) + c * zi;
+    }
+  }
+  function epgRfChecked(S, alpha, phi) {
+    // Straightforward complex implementation (slow path used to cross-check epgRf in the tests).
+    const cmul = (a, b) => [a[0] * b[0] - a[1] * b[1], a[0] * b[1] + a[1] * b[0]];
+    const e = (x) => [Math.cos(x), Math.sin(x)];
+    const sa = Math.sin(alpha), ca = Math.cos(alpha),
+      c2 = Math.cos(alpha / 2) ** 2, s2 = Math.sin(alpha / 2) ** 2;
+    const T = [
+      [[c2, 0], cmul([s2, 0], e(2 * phi)), cmul([0, -sa], e(phi))],
+      [cmul([s2, 0], e(-2 * phi)), [c2, 0], cmul([0, sa], e(-phi))],
+      [cmul([0, -sa / 2], e(-phi)), cmul([0, sa / 2], e(phi)), [ca, 0]],
+    ];
+    for (let k = 0; k < S.n; k++) {
+      const v = [[S.fpr[k], S.fpi[k]], [S.fmr[k], S.fmi[k]], [S.zr[k], S.zi[k]]];
+      const o = T.map((row) =>
+        row.reduce((a, t, j) => {
+          const m = cmul(t, v[j]);
+          return [a[0] + m[0], a[1] + m[1]];
+        }, [0, 0]),
+      );
+      S.fpr[k] = o[0][0]; S.fpi[k] = o[0][1];
+      S.fmr[k] = o[1][0]; S.fmi[k] = o[1][1];
+      S.zr[k] = o[2][0]; S.zi[k] = o[2][1];
+    }
+  }
+  function epgState(n) {
+    return {
+      n,
+      fpr: new Float64Array(n), fpi: new Float64Array(n),
+      fmr: new Float64Array(n), fmi: new Float64Array(n),
+      zr: new Float64Array(n), zi: new Float64Array(n),
+    };
+  }
+  function epgRelax(S, tau, t1, t2) {
+    const E1 = Math.exp(-tau / t1), E2 = Math.exp(-tau / t2);
+    for (let k = 0; k < S.n; k++) {
+      S.fpr[k] *= E2; S.fpi[k] *= E2; S.fmr[k] *= E2; S.fmi[k] *= E2;
+      S.zr[k] *= E1; S.zi[k] *= E1;
+    }
+    S.zr[0] += 1 - E1; // regrowth towards M0 = 1 (order 0 only)
+  }
+  function epgDephase(S) {
+    // F+ shifts k -> k+1, F- shifts k -> k-1, then F+_0 = conj(F-_0)
+    for (let k = S.n - 1; k >= 1; k--) {
+      S.fpr[k] = S.fpr[k - 1];
+      S.fpi[k] = S.fpi[k - 1];
+    }
+    for (let k = 0; k < S.n - 1; k++) {
+      S.fmr[k] = S.fmr[k + 1];
+      S.fmi[k] = S.fmi[k + 1];
+    }
+    S.fmr[S.n - 1] = 0;
+    S.fmi[S.n - 1] = 0;
+    S.fpr[0] = S.fmr[0];
+    S.fpi[0] = -S.fmi[0];
+  }
+  // Refocusing flip angles (deg) for echo 1..ETL: linear ramp from ra to rb (constant when ra = rb)
+  function refocusAngles(p) {
+    const n = p.etl,
+      a = p.ra === undefined ? 180 : p.ra,
+      b = p.rb === undefined ? a : p.rb,
+      out = new Array(n);
+    for (let i = 0; i < n; i++) out[i] = n === 1 ? a : a + ((b - a) * i) / (n - 1);
+    return out;
+  }
+  // One TR of the CPMG/FSE EPG, starting from Z0 = z0pre (all other states zero). Returns the echo
+  // amplitudes |F+_0|, Z0 just after each RF pulse, and Z0 at the end of the TR (before the next 90).
+  function epgRunTR(t1, t2, tr, esp, angles, z0pre) {
+    const etl = angles.length,
+      S = epgState(2 * etl + 3);
+    S.zr[0] = z0pre;
+    epgRf(S, Math.PI / 2, Math.PI / 2);
+    const z0AfterExc = S.zr[0],
+      amps = new Float64Array(etl),
+      z0After = new Float64Array(etl);
+    for (let i = 0; i < etl; i++) {
+      epgRelax(S, esp / 2, t1, t2);
+      epgDephase(S);
+      epgRf(S, angles[i] * D2R, 0);
+      z0After[i] = S.zr[0];
+      epgDephase(S);
+      epgRelax(S, esp / 2, t1, t2);
+      amps[i] = Math.hypot(S.fpr[0], S.fpi[0]);
+    }
+    const z0EndOfTrain = S.zr[0],
+      rest = tr - etl * esp,
+      z0End = 1 - (1 - z0EndOfTrain) * Math.exp(-rest / t1);
+    return { amps, z0AfterExc, z0After, z0EndOfTrain, z0End };
+  }
+  const epgCache = new Map();
+  // Steady-state FSE echo train. Linear in the initial Z0, so the periodic steady state is solved exactly:
+  // z_end(z) = a z + b  =>  z_ss = b / (1 - a).
+  function epgFse(t1, t2, p) {
+    const angles = refocusAngles(p),
+      key = [t1, t2, p.tr, p.esp, p.etl, angles[0], angles[angles.length - 1]].join("|");
+    const hit = epgCache.get(key);
+    if (hit) return hit;
+    const r0 = epgRunTR(t1, t2, p.tr, p.esp, angles, 0),
+      r1 = epgRunTR(t1, t2, p.tr, p.esp, angles, 1),
+      a = r1.z0End - r0.z0End,
+      b = r0.z0End,
+      z0ss = b / (1 - a),
+      run = epgRunTR(t1, t2, p.tr, p.esp, angles, z0ss);
+    const out = {
+      angles,
+      z0pre: z0ss,
+      amps: run.amps,
+      z0AfterExc: run.z0AfterExc,
+      z0After: run.z0After,
+      z0End: run.z0End,
+    };
+    if (epgCache.size > 400) epgCache.clear();
+    epgCache.set(key, out);
+    return out;
+  }
+  function isIdealRefocus(p) {
+    return refocusAngles(p).every((x) => Math.abs(x - 180) < 1e-12);
+  }
+  function fseCentreEcho(p) {
+    return Number.isInteger(p.echoIndex)
+      ? p.echoIndex
+      : Math.max(1, Math.min(p.etl, Math.round(p.te / p.esp)));
+  }
+  // Closed-form idealised FSE signal (ideal 180 deg pulses): kept as the reference the EPG must reproduce.
+  function fseAnalyticSignal(rho, t1, t2, p) {
+    return rho * mzBefore90(t1, p.tr, pulses180("fse", p)) * Math.exp(-fseCentreEcho(p) * p.esp / t2);
+  }
+  // k-space modulation caused by the echo train. Simplified ordering model (documented in the page): the k-space
+  // is split into ETL contiguous bands; echo i fills the band centred (i - centreEcho) bands from ky = 0, wrapped
+  // periodically. Returns the weighting, the point-spread function magnitude and its FWHM relative to the
+  // unweighted case (1 = no blurring).
+  function fseKspace(amps, centreEcho, nPE) {
+    nPE = nPE || 256;
+    const etl = amps.length,
+      seg = nPE / etl,
+      w = new Float64Array(nPE),
+      ref = new Float64Array(nPE).fill(1);
+    for (let m = 0; m < nPE; m++) {
+      const ky = m - nPE / 2, // ky = 0 at m = nPE/2
+        band = Math.floor((ky + seg / 2) / seg),
+        i = (((centreEcho - 1 + band) % etl) + etl) % etl;
+      w[m] = amps[i];
+    }
+    const psf = (wt) => {
+      const out = new Float64Array(nPE);
+      for (let x = 0; x < nPE; x++) {
+        const xx = x - nPE / 2;
+        let re = 0, im = 0;
+        for (let m = 0; m < nPE; m++) {
+          const ph = (2 * Math.PI * (m - nPE / 2) * xx) / nPE;
+          re += wt[m] * Math.cos(ph);
+          im += wt[m] * Math.sin(ph);
+        }
+        out[x] = Math.hypot(re, im);
+      }
+      return out;
+    };
+    const fwhm = (a) => {
+      const c = nPE / 2, half = a[c] / 2;
+      let r = c, l = c;
+      while (r < nPE - 1 && a[r] > half) r++;
+      while (l > 0 && a[l] > half) l--;
+      const xr = r - 1 + (a[r - 1] - half) / (a[r - 1] - a[r] || 1),
+        xl = l + 1 - (a[l + 1] - half) / (a[l + 1] - a[l] || 1);
+      return xr - xl;
+    };
+    const P = psf(w), P0 = psf(ref);
+    return { weights: w, psf: P, fwhm: fwhm(P), fwhmIdeal: fwhm(P0), blur: fwhm(P) / fwhm(P0) };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Longitudinal magnetisation and signals
+  // ---------------------------------------------------------------------------
+  // Mz(TI) of an IR sequence (inversion, 90 deg readout at TI, refocusing 180 at TI + TE/2), steady state, M0 = 1.
+  function irMzAtTI(t1, p, ti) {
+    const mPre = mzBefore90(t1, p.tr - ti, [p.te / 2]); // Mz just before the next inversion
+    return 1 - (1 + mPre) * Math.exp(-ti / t1);
+  }
+  function mzConverted(q, t1, p, t2) {
+    // Longitudinal magnetisation sampled by the sequence's read-out (just before the excitation that is read).
+    if (q === "ir") return irMzAtTI(t1, p, p.ti);
+    if (q === "gre" || q === "epi") return spoiledGreMz(1, t1, p.tr, p.fa);
+    if (q === "bssfp") {
+      if (!(t2 > 0)) throw new RangeError("mzConverted('bssfp') needs T2.");
+      return bssfpSteady(t1, t2, p.tr, p.fa).mzBefore;
+    }
+    if (q === "fse") {
+      if (isIdealRefocus(p)) return mzBefore90(t1, p.tr, pulses180(q, p));
+      if (!(t2 > 0)) throw new RangeError("mzConverted('fse') with non-180 refocusing needs T2.");
+      return epgFse(t1, t2, p).z0pre;
+    }
+    return mzBefore90(t1, p.tr, pulses180(q, p));
+  }
+  // Longitudinal magnetisation (M0 = 1) at time t after the first RF pulse of the cycle, in steady state, followed pulse
+  // by pulse: 90 sets Mz to 0, a 180 inverts it, a flip angle a multiplies it by cos(a); between pulses it recovers with T1.
+  // FSE with non-180 refocusing follows the EPG Z0 state (needs t2, because partial refocusing couples Z0 and F states).
+  function mzTraj(q, t1, p, t, t2) {
+    const rec = (m, dt) => 1 - (1 - m) * Math.exp(-dt / t1);
+    if (q === "fse" && !isIdealRefocus(p)) {
+      if (!(t2 > 0)) throw new RangeError("mzTraj('fse') with non-180 refocusing needs T2.");
+      const e = epgFse(t1, t2, p);
+      let m = e.z0AfterExc, tp = 0;
+      for (let i = 0; i < p.etl; i++) {
+        const c = (i + 0.5) * p.esp;
+        if (c > t) break;
+        m = rec(m, c - tp);
+        m = e.z0After[i];
+        tp = c;
+      }
+      return rec(m, t - tp);
+    }
+    if (q === "bssfp") {
+      if (!(t2 > 0)) throw new RangeError("mzTraj('bssfp') needs T2.");
+      return rec(bssfpSteady(t1, t2, p.tr, p.fa).mzAfter, t); // after the alpha pulse at t = 0, within one TR
+    }
+    let m, ev;
+    if (q === "ir") {
+      m = mzBefore90(t1, p.tr - p.ti, [p.te / 2]);
+      ev = [[0, -1], [p.ti, 0], [p.ti + p.te / 2, -1]]; // inversion, read-out 90, refocusing 180
+    } else if (q === "gre" || q === "epi") {
+      const E1 = Math.exp(-p.tr / t1), c = Math.cos(p.fa * D2R);
+      m = (1 - E1) / (1 - c * E1);
+      ev = [[0, c]]; // spoiled steady state
+    } else {
+      m = 0;
+      ev = [[0, 0], ...pulses180(q, p).map((x) => [x, -1])];
+    }
+    let tp = 0;
+    for (const [te, f] of ev) {
+      if (te > t) break;
+      m = rec(m, te - tp) * f;
+      tp = te;
+    }
+    return rec(m, t - tp);
+  }
+  // Relative signal for idealised sequences. p = {tr,te,ti,fa,tp,etl,esp,echoIndex,ra,rb}
+  function seqSignal(q, rho, t1, t2, p) {
+    const E1 = Math.exp(-p.tr / t1), a = p.fa * D2R;
+    switch (q) {
+      case "se":
+        return rho * mzConverted(q, t1, p) * Math.exp(-p.te / t2);
+      case "fse": {
+        const e = epgFse(t1, t2, p);
+        return rho * e.amps[fseCentreEcho(p) - 1]; // amplitude of the echo that fills the centre of k-space
+      }
+      case "ir":
+        return Math.abs(rho * mzConverted(q, t1, p)) * Math.exp(-p.te / t2); // magnitude IR, SE read-out
+      case "gre":
+      case "epi":
+        return spoiledGreMz(rho, t1, p.tr, p.fa) * Math.sin(a) * Math.exp(-p.te / t2star(t2, p.tp));
+      case "bssfp": {
+        const E2 = Math.exp(-p.tr / t2);
+        return (
+          (rho * (1 - E1) * Math.sin(a) * Math.exp(-p.tr / (2 * t2))) /
+          (1 - (E1 - E2) * Math.cos(a) - E1 * E2)
+        ); // on-resonance, TE = TR/2
+      }
+    }
+    return NaN;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Shared timing model: the ONLY place where event times are computed. Validation, the timing diagram and the
+  // acquisition information all consume buildTiming(). Durations are nominal schematic values proportional to the
+  // sequence's own time scale (they are not vendor hardware limits); what is guaranteed is that everything drawn
+  // is also what is validated.
+  // Event records: rf {t, hw, h, label, kind, name, cyc}; gradient lobes {a, b, h, step, name, cyc}; adc {a, b, name, cyc}.
+  // cyc = 0: the current TR; cyc = 1: the next excitation block at t = TR (and, for bSSFP, further cycles).
+  // ---------------------------------------------------------------------------
+  const TIMING_GUARD_MS = 0.05; // dead-time guard between the last event and the next RF/slice-select event
+  const rfEv = (t, hw, h, label, kind, name, cyc, flip) => ({ t, hw, h, label, kind, name, cyc: cyc || 0, flip });
+  const lobe = (a, b, h, name, cyc, step) => ({ a, b, h, name, cyc: cyc || 0, step: !!step });
+  function buildTiming(p) {
+    const q = p.seq,
+      T = {
+        seq: q, rf: [], gz: [], gy: [], gx: [], adc: [], echoes: [], ex: [], segs: [], br: [],
+        u: 0, sw: 1, fw: 1, centre: 0, scalesWithTR: false,
+      };
+    const C1 = "#5cc8ff", C2 = "#ff7bd0";
+    const excBlock = (t0, u, cyc, label, kind, h, flip) => {
+      T.rf.push(rfEv(t0, u, h || 40, label, kind || "exc", "excitation RF pulse" + (cyc ? " (next TR)" : ""), cyc, flip === undefined ? 90 : flip));
+      T.gz.push(
+        lobe(t0 - u, t0 + u, 1, "slice-select gradient" + (cyc ? " (next TR)" : ""), cyc),
+        lobe(t0 + u, t0 + 2 * u, -1, "slice rephasing gradient" + (cyc ? " (next TR)" : ""), cyc),
+      );
+    };
+    const se180 = (c, u, tag) => {
+      T.gz.push(
+        lobe(c - 2.7 * u, c - 1.2 * u, 0.8, "crusher before " + tag, 0),
+        lobe(c - u, c + u, 1, "slice-select gradient of " + tag, 0),
+        lobe(c + 1.2 * u, c + 2.7 * u, 0.8, "crusher after " + tag, 0),
+      );
+    };
+    switch (q) {
+      case "se": {
+        const te = p.te, u = Math.max(te, 8) * 0.04, wro = Math.max(te * 0.25, 6 * u), h2 = te / 2, q4 = te / 4;
+        T.u = u;
+        excBlock(0, u, 0, "90°", "exc", 40);
+        T.rf.push(rfEv(h2, u, 64, "180°", "ref", "180° refocusing pulse", 0, 180));
+        se180(h2, u, "the 180° pulse");
+        excBlock(p.tr, u, 1, "90°", "exc", 40);
+        T.gy.push(lobe(q4 - 1.5 * u, q4 + 1.5 * u, 1, "phase-encode gradient", 0, true));
+        T.gx.push(
+          lobe(q4 - wro / 4, q4 + wro / 4, 1, "read-out pre-phaser (half the read-out area)", 0),
+          lobe(te - wro / 2, te + wro / 2, 1, "read-out gradient", 0),
+        );
+        T.adc.push({ a: te - wro / 2, b: te + wro / 2, name: "read-out ADC window", cyc: 0 });
+        T.ex = [0];
+        T.echoes = [{ t: te, index: 1 }];
+        T.sw = wro / 5;
+        T.fw = u;
+        T.segs = [[-3 * u, te + wro / 2 + 1.5 * u], [p.tr - 3 * u, p.tr + 3 * u]];
+        T.br = [[0, te, "TE = " + te + " ms"], [0, p.tr, "TR = " + p.tr + " ms"]];
+        break;
+      }
+      case "fse": {
+        const n = p.etl, E = p.esp, u = E * 0.06, ist = fseCentreEcho(p), ang = refocusAngles(p);
+        T.u = u;
+        excBlock(0, u, 0, "90°", "exc", 40);
+        T.gx.push(lobe(0.15 * E, 0.3 * E, 1, "read-out pre-phaser", 0));
+        const ideal = ang.every((x) => Math.abs(x - 180) < 1e-9);
+        const lab = ideal ? "180° ×" + n : Math.abs(ang[0] - ang[n - 1]) < 1e-9 ? ang[0] + "° ×" + n : ang[0].toFixed(0) + "→" + ang[n - 1].toFixed(0) + "° ×" + n;
+        for (let i = 1; i <= n; i++) {
+          const c = (i - 0.5) * E, e = i * E, am = (0.9 * (i - ist)) / Math.max(n - ist, ist - 1, 1), fl = ang[i - 1];
+          T.rf.push(rfEv(c, u, 20 + (44 * fl) / 180, i === 1 ? lab : "", "ref", "refocusing pulse #" + i, 0, fl));
+          se180(c, u, "refocusing pulse #" + i);
+          if (Math.abs(am) > 0.01)
+            T.gy.push(
+              lobe(e - 6 * u, e - 4 * u, am, "phase-encode gradient #" + i, 0, true),
+              lobe(e + 4 * u, e + 6 * u, -am, "phase-encode rewinder #" + i, 0, true),
+            ); // zero at the TE_eff echo (k-space centre)
+          T.gx.push(lobe(e - 0.15 * E, e + 0.15 * E, 1, "read-out gradient #" + i, 0));
+          T.adc.push({ a: e - 0.15 * E, b: e + 0.15 * E, name: "ADC window #" + i, cyc: 0 });
+          T.echoes.push({ t: e, index: i });
+        }
+        excBlock(p.tr, u, 1, "90°", "exc", 40);
+        T.ex = [0];
+        T.centre = ist - 1;
+        T.sw = E * 0.06;
+        T.fw = u;
+        T.segs = [[-3 * u, n * E + 0.45 * E], [p.tr - 3 * u, p.tr + 3 * u]];
+        T.br = [[0, p.te, "TE_eff = " + p.te + " ms"], [0, E, "ESP"], [0, p.tr, "TR = " + p.tr + " ms"]];
+        break;
+      }
+      case "gre": {
+        const te = p.te, u = te * 0.06, wro = 0.55 * te;
+        T.u = u;
+        excBlock(0, u, 0, "α=" + p.fa + "°", "exc", 40, p.fa);
+        T.gz.push(lobe(1.35 * te, 1.8 * te, 1, "slice spoiler gradient", 0));
+        excBlock(p.tr, u, 1, "α", "exc", 40, p.fa);
+        T.gy.push(
+          lobe(2.2 * u, 2.2 * u + wro / 2, 1, "phase-encode gradient", 0, true),
+          lobe(1.35 * te, 1.35 * te + wro / 2, -1, "phase-encode rewinder", 0, true),
+        );
+        T.gx.push(
+          lobe(2.2 * u, 2.2 * u + wro / 2, -1, "read-out dephaser (half the read-out area)", 0),
+          lobe(te - wro / 2, te + wro / 2, 1, "read-out gradient", 0),
+        );
+        T.adc.push({ a: te - wro / 2, b: te + wro / 2, name: "read-out ADC window", cyc: 0 });
+        T.ex = [0];
+        T.echoes = [{ t: te, index: 1 }];
+        T.sw = wro / 5;
+        T.fw = u;
+        T.segs = [[-3 * u, 1.9 * te], [p.tr - 3 * u, p.tr + 3 * u]];
+        T.br = [[0, te, "TE = " + te + " ms"], [0, p.tr, "TR = " + p.tr + " ms"]];
+        break;
+      }
+      case "epi": {
+        const n = p.etl, E = p.esp, cI = Math.floor(n / 2), u = E * 0.6;
+        const Ts = p.te - (cI + 0.5) * E, // first read-out lobe starts so that echo cI is centred on TE
+          pre0 = Ts - 0.75 * E, pre1 = Ts - 0.25 * E;
+        T.u = u;
+        excBlock(0, u, 0, "α=" + p.fa + "°", "exc", 40, p.fa);
+        excBlock(p.tr, u, 1, "α", "exc", 40, p.fa);
+        const ab = Math.min(1, 10 / n), Ap = cI * ab * 0.1 * E;
+        T.gx.push(lobe(pre0, pre1, -1, "read-out prephaser", 0));
+        T.gy.push(lobe(pre0, pre0 + Ap, -1, "phase-encode prephaser", 0));
+        for (let j = 0; j < n; j++) {
+          const a0 = Ts + j * E;
+          T.gx.push(lobe(a0, a0 + E, j % 2 ? -1 : 1, "read-out lobe #" + (j + 1), 0));
+          T.adc.push({ a: a0, b: a0 + E, name: "ADC window #" + (j + 1), cyc: 0 });
+          T.echoes.push({ t: a0 + E / 2, index: j + 1 });
+          if (j < n - 1) T.gy.push(lobe(a0 + 0.95 * E, a0 + 1.05 * E, ab, "phase-encode blip #" + (j + 1), 0));
+        }
+        T.ex = [0];
+        T.centre = cI;
+        T.sw = E / 6;
+        T.fw = u;
+        T.segs = [[-2 * u, 2.5 * u], [pre0, Ts + n * E + E], [p.tr - 2 * u, p.tr + 2 * u]];
+        T.br = [[0, p.te, "TE = " + p.te + " ms"], [Ts, Ts + n * E, "read-out " + (n * E).toFixed(1) + " ms"], [0, p.tr, "TR = " + p.tr + " ms"]];
+        T.epi = {
+          centreIndex: cI,
+          readoutStart: Ts,
+          readoutEnd: Ts + n * E,
+          prephaserStart: pre0,
+          prephaserEnd: pre1,
+          rfEnd: u,
+          minTE: (cI + 1.25) * E + u + TIMING_GUARD_MS,
+        };
+        break;
+      }
+      case "ir": {
+        const te = p.te, ti = p.ti, u = Math.max(te, 10) * 0.04, wro = Math.max(te * 0.25, 6 * u),
+          h2 = ti + te / 2, ee = ti + te, q4 = ti + te / 4;
+        T.u = u;
+        T.rf.push(rfEv(0, u, 64, "180° inv.", "inv", "inversion pulse", 0, 180));
+        T.gz.push(
+          lobe(-u, u, 1, "inversion slice-select gradient", 0),
+          lobe(2 * u, 4 * u, 0.9, "spoiler after the inversion", 0),
+        );
+        T.rf.push(rfEv(ti, u, 40, "90°", "exc", "90° excitation pulse", 0, 90));
+        T.gz.push(
+          lobe(ti - u, ti + u, 1, "slice-select gradient of the 90°", 0),
+          lobe(ti + u, ti + 2 * u, -1, "slice rephasing gradient", 0),
+        );
+        T.rf.push(rfEv(h2, u, 64, "180°", "ref", "180° refocusing pulse", 0, 180));
+        se180(h2, u, "the 180° pulse");
+        T.rf.push(rfEv(p.tr, u, 64, "180° inv.", "inv", "inversion pulse (next TR)", 1, 180));
+        T.gz.push(lobe(p.tr - u, p.tr + u, 1, "inversion slice-select gradient (next TR)", 1));
+        T.gy.push(lobe(q4 - 1.5 * u, q4 + 1.5 * u, 1, "phase-encode gradient", 0, true));
+        T.gx.push(
+          lobe(q4 - wro / 4, q4 + wro / 4, 1, "read-out pre-phaser", 0),
+          lobe(ee - wro / 2, ee + wro / 2, 1, "read-out gradient", 0),
+        );
+        T.adc.push({ a: ee - wro / 2, b: ee + wro / 2, name: "read-out ADC window", cyc: 0 });
+        T.ex = [ti];
+        T.echoes = [{ t: ee, index: 1 }];
+        T.sw = wro / 5;
+        T.fw = u;
+        T.segs = [[-3 * u, 5 * u], [ti - 3 * u, ee + wro / 2 + 1.5 * u], [p.tr - 3 * u, p.tr + 3 * u]];
+        T.br = [[0, ti, "TI = " + ti + " ms"], [ti, ee, "TE"], [0, p.tr, "TR = " + p.tr + " ms"]];
+        break;
+      }
+      default: {
+        // balanced SSFP: every gradient axis has zero net area per TR; geometry scales with TR
+        const R = p.tr, u = R * 0.04;
+        T.u = u;
+        T.scalesWithTR = true;
+        for (let k = 0; k < 3; k++) {
+          const c = k * R, cyc = k;
+          T.rf.push(rfEv(c, u, 40, k % 2 ? "−α" : "+α", "exc", "α excitation pulse" + (k ? " (TR " + (k + 1) + ")" : ""), cyc, p.fa));
+          T.gz.push(
+            lobe(c - u, c + u, 1, "slice-select gradient", cyc),
+            lobe(c + u, c + 2 * u, -1, "slice rephasing gradient", cyc),
+            lobe(c + R - 3 * u, c + R - 2 * u, -1, "slice pre-winder", cyc),
+          );
+          T.gx.push(
+            lobe(c + 0.1 * R, c + 0.3 * R, -1, "read-out dephaser", cyc),
+            lobe(c + 0.3 * R, c + 0.7 * R, 1, "read-out gradient", cyc),
+            lobe(c + 0.7 * R, c + 0.9 * R, -1, "read-out rewinder", cyc),
+          );
+          T.gy.push(
+            lobe(c + 0.1 * R, c + 0.3 * R, 1, "phase-encode gradient", cyc, true),
+            lobe(c + 0.7 * R, c + 0.9 * R, -1, "phase-encode rewinder", cyc, true),
+          );
+          T.adc.push({ a: c + 0.3 * R, b: c + 0.7 * R, name: "read-out ADC window", cyc });
+          T.ex.push(c);
+          T.echoes.push({ t: c + R / 2, index: k + 1 });
+        }
+        T.sw = 0.08 * R;
+        T.fw = u;
+        T.centre = 1;
+        T.segs = [[-2 * u, 3 * R - u]];
+        T.br = [[0, R / 2, "TE = TR/2"], [0, R, "TR = " + R + " ms"]];
+      }
+    }
+    return T;
+  }
+  function allEvents(T) {
+    const out = [];
+    for (const r of T.rf) out.push({ axis: "rf", a: r.t - r.hw, b: r.t + r.hw, name: r.name, cyc: r.cyc });
+    for (const ax of ["gz", "gy", "gx"]) for (const l of T[ax]) out.push({ axis: ax, a: l.a, b: l.b, name: l.name, cyc: l.cyc });
+    for (const a of T.adc) out.push({ axis: "adc", a: a.a, b: a.b, name: a.name, cyc: a.cyc });
+    return out;
+  }
+  const f2 = (x) => (Math.round(x * 100) / 100).toFixed(2);
+  // Validates the timing of a candidate parameter set. Returns {ok, message, lastName, lastEnd, nextStart, slack, minTR}.
+  function validateTiming(p) {
+    const T = buildTiming(p), ev = allEvents(T), eps = 1e-9;
+    for (const e of ev)
+      if (!(Number.isFinite(e.a) && Number.isFinite(e.b)) || e.b - e.a <= 0)
+        return { ok: false, message: `Timing error: "${e.name}" has an invalid duration (${f2(e.a)} to ${f2(e.b)} ms).` };
+    // gradients and ADC must keep a guard distance from every RF pulse (slice-select gradients are played with the RF)
+    for (const r of ev.filter((e) => e.axis === "rf"))
+      for (const e of ev)
+        if ((e.axis === "gx" || e.axis === "gy" || e.axis === "adc") && e.a < r.b + TIMING_GUARD_MS - eps && e.b > r.a - TIMING_GUARD_MS + eps)
+          return {
+            ok: false,
+            message: `Timing error: "${e.name}" (${f2(e.a)}–${f2(e.b)} ms) comes within ${TIMING_GUARD_MS} ms of "${r.name}" (${f2(r.a)}–${f2(r.b)} ms). ` +
+              (e.cyc !== r.cyc ? "Increase TR or shorten the acquisition." : "Increase TE, ESP or TI."),
+          };
+    // events on the same axis must not overlap each other
+    for (const ax of ["gz", "gy", "gx", "rf", "adc"]) {
+      const l = ev.filter((e) => e.axis === ax).sort((x, y) => x.a - y.a);
+      for (let i = 1; i < l.length; i++)
+        if (l[i].a < l[i - 1].b - eps)
+          return { ok: false, message: `Timing error: "${l[i].name}" (starts ${f2(l[i].a)} ms) overlaps "${l[i - 1].name}" (ends ${f2(l[i - 1].b)} ms) on the same ${ax.toUpperCase()} axis. Increase TE, ESP or TI.` };
+    }
+    const cur = ev.filter((e) => e.cyc === 0),
+      nxt = ev.filter((e) => e.cyc === 1);
+    let last = cur[0];
+    for (const e of cur) if (e.b > last.b) last = e;
+    let nextStart = Infinity;
+    for (const e of nxt) nextStart = Math.min(nextStart, e.a);
+    const slack = nextStart - last.b,
+      lead = p.tr - nextStart, // how far before TR the next excitation block starts
+      minTR = T.scalesWithTR ? null : last.b + lead + TIMING_GUARD_MS;
+    const out = { ok: slack >= TIMING_GUARD_MS - eps, lastName: last.name, lastEnd: last.b, nextStart, slack, minTR, guard: TIMING_GUARD_MS };
+    if (!out.ok)
+      out.message = `Timing error: "${last.name}" ends at ${f2(last.b)} ms but the next excitation block starts at ${f2(nextStart)} ms (TR = ${p.tr} ms); a guard of ${TIMING_GUARD_MS} ms is required.` +
+        (minTR !== null ? ` Increase TR to at least ${(Math.ceil(minTR * 100) / 100).toString()} ms or shorten the acquisition.` : " Increase TR.");
+    return out;
+  }
+  // Full parameter validation for a candidate state. Returns "" when valid, otherwise an explanatory message.
+  // Keep the model boundary authoritative: UI controls and shared URL states must obey identical limits and steps.
+  function validate(c) {
+    const q = c.seq;
+    const need = {
+      se: ["tr", "te"],
+      fse: ["tr", "te", "etl", "esp"],
+      gre: ["tr", "te", "fa", "tp"],
+      epi: ["tr", "te", "fa", "etl", "esp", "tp"],
+      ir: ["tr", "te", "ti"],
+      bssfp: ["tr", "fa"],
+    }[q];
+    if (!need) return "Unknown sequence.";
+
+    // Custom-tissue parameters affect every sequence, not just the visible acquisition controls.
+    const ranged = new Set(need.filter((k) => !(q === "fse" && k === "te")));
+    // Custom-tissue values are optional in the physics API, but are validated when supplied by the UI.
+    for (const k of ["t1", "t2", "pd"]) if (c[k] !== undefined) ranged.add(k);
+    if (q === "fse") {
+      for (const k of ["ra", "rb"]) if (c[k] !== undefined) ranged.add(k);
+    }
+    for (const k of ranged) {
+      const value = c[k], r = rangeOf(k, q);
+      if (!Number.isFinite(value)) return `${k.toUpperCase()} must be a finite number.`;
+      if (value < r.min - 1e-9 || value > r.max + 1e-9)
+        return `${k.toUpperCase()} must be between ${r.min} and ${r.max}.`;
+      // Unit-space tolerance handles binary floating-point values such as 0.3 / 0.1.
+      const units = (value - r.min) / r.step;
+      if (Math.abs(units - Math.round(units)) > 1e-7)
+        return `${k.toUpperCase()} must use increments of ${r.step}.`;
+    }
+
+    if (["se", "fse", "gre", "epi"].includes(q) && c.te >= c.tr)
+      return `TE (${c.te} ms) must be shorter than TR (${c.tr} ms).`;
+    if (["fse", "epi"].includes(q) && !Number.isInteger(c.etl))
+      return "ETL must be a whole number of echoes.";
+    if (q === "fse") {
+      if (!Number.isInteger(c.echoIndex) || c.echoIndex < 1 || c.echoIndex > c.etl || Math.abs(c.te - fseEchoTime(c.echoIndex, c.esp, c.etl)) > 1e-8)
+        return "FSE TEeff must equal an acquired echo: echoIndex × ESP, with echoIndex between 1 and ETL.";
+      for (const k of ["ra", "rb"]) {
+        if (c[k] !== undefined && (!Number.isFinite(c[k]) || c[k] < 30 || c[k] > 180))
+          return "Refocusing flip angles must be between 30° and 180°.";
+      }
+    }
+    if (q === "ir" && c.ti >= c.tr)
+      return `TI (${c.ti} ms) must be shorter than TR (${c.tr} ms).`;
+
+    const v = validateTiming(c);
+    return v.ok ? "" : v.message;
+  }
+  // Timing facts shown to the user, taken from the same model that validates.
+  function acquisitionInfo(p) {
+    const T = buildTiming(p), v = validateTiming(p), adc = T.adc.filter((a) => a.cyc === 0);
+    const first = adc[0], lastA = adc[adc.length - 1];
+    return {
+      ok: v.ok, lastName: v.lastName, lastEnd: v.lastEnd, nextStart: v.nextStart, slack: v.slack,
+      adcStart: first ? first.a : NaN, adcEnd: lastA ? lastA.b : NaN, nAdc: adc.length,
+      echoTimes: T.echoes.filter((e, i) => p.seq === "bssfp" ? i === 0 : true).map((e) => e.t),
+    };
+  }
+  // EPI timing, projected from the shared timing model (kept for API/tests)
+  function epiTiming(p) {
+    const T = buildTiming({ ...p, seq: "epi" }), e = T.epi, v = validateTiming({ ...p, seq: "epi" });
+    return {
+      ...e,
+      startsAfterExcitation: e.prephaserStart >= e.rfEnd + TIMING_GUARD_MS - 1e-9,
+      endsBeforeNextExcitation: e.readoutEnd + TIMING_GUARD_MS <= v.nextStart + 1e-9,
+      valid: v.ok && e.prephaserStart >= e.rfEnd + TIMING_GUARD_MS - 1e-9,
+    };
+  }
+  // Smallest/largest TI for which the IR timing is valid, derived from validateTiming/buildTiming (not re-derived).
+  // The end of the last current-TR event moves 1:1 with TI while the next inversion block stays at TR, so the upper bound
+  // follows from the slack at any probe TI; the lower bound (inversion spoiler must finish before the 90 deg lobe) is found
+  // by bisection on validity.
+  function irTiBounds(p) {
+    const q = { ...p, seq: "ir" },
+      T = buildTiming({ ...q, ti: 1000 }),
+      ev = allEvents(T),
+      lastEnd = Math.max(...ev.filter((e) => e.cyc === 0).map((e) => e.b)),
+      nextStart = Math.min(...ev.filter((e) => e.cyc === 1).map((e) => e.a)),
+      max = 1000 + (nextStart - TIMING_GUARD_MS - lastEnd),
+      okAt = (ti) => validateTiming({ ...q, ti }).ok;
+    if (!(max > 0) || !okAt(max)) return { min: NaN, max, ok: false };
+    let lo = 0, hi = max;
+    for (let i = 0; i < 80; i++) {
+      const mid = (lo + hi) / 2;
+      if (okAt(mid)) hi = mid;
+      else lo = mid;
+    }
+    return { min: hi, max, ok: true };
+  }
+  // Null inversion time: solves Mz(TI) = 0 with the SAME magnetisation model as the IR signal (irMzAtTI), by bisection on a
+  // bracket taken from the timing model. Returns {ok, ti, residual, iterations, lo, hi, reason}.
+  function nullTIDetail(t1, tr, p, opts) {
+    const o = { tolMs: 1e-9, tolRes: 1e-9, maxIter: 200, ...(opts || {}) };
+    const pp = { ...p, seq: "ir", tr },
+      fail = (reason) => ({ ok: false, ti: NaN, residual: NaN, iterations: 0, reason });
+    if (!(t1 > 0) || !(tr > 0)) return fail("T1 and TR must be positive.");
+    const b = irTiBounds(pp);
+    if (!b.ok) return fail("No valid TI exists for this TR and TE (the acquisition does not fit in TR).");
+    let lo = b.min, hi = b.max;
+    const f = (ti) => irMzAtTI(t1, pp, ti);
+    let flo = f(lo), fhi = f(hi);
+    if (flo === 0) return { ok: true, ti: lo, residual: 0, iterations: 0, lo, hi, reason: "" };
+    if (fhi === 0) return { ok: true, ti: hi, residual: 0, iterations: 0, lo, hi, reason: "" };
+    if (flo > 0 || fhi < 0)
+      return fail(flo > 0 ? "Mz(TI) is already positive at the shortest valid TI: no null exists for this T1, TR and TE." : "Mz(TI) is still negative at the longest valid TI: no null exists for this T1, TR and TE.");
+    let it = 0;
+    while (hi - lo > o.tolMs && it < o.maxIter) {
+      const mid = 0.5 * (lo + hi), fm = f(mid);
+      if (fm === 0) { lo = hi = mid; break; }
+      if (fm < 0) lo = mid; else hi = mid;
+      it++;
+    }
+    const ti = 0.5 * (lo + hi), residual = Math.abs(f(ti));
+    if (!(residual < o.tolRes)) return { ok: false, ti: NaN, residual, iterations: it, lo, hi, reason: "Root finder did not converge to the required residual." };
+    return { ok: true, ti, residual, iterations: it, lo: b.min, hi: b.max, reason: "" };
+  }
+  // Number if a verified null exists, otherwise null (never an unconverged value).
+  function nullTI(t1, tr, p) {
+    const r = nullTIDetail(t1, tr, p);
+    return r.ok ? r.ti : null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Phantom geometry in a unit square: one definition for drawing, hit testing and highlighting.
+  // ---------------------------------------------------------------------------
+  const PHANTOM = {
+    cx: 0.5,
+    cy: 0.5,
+    rings: [
+      { k: "fat", rx: 0.46, ry: 0.4 },
+      { k: "csf", rx: 0.41, ry: 0.35 },
+      { k: "gm", rx: 0.36, ry: 0.3 },
+      { k: "wm", rx: 0.25, ry: 0.2 },
+    ],
+    marker: { k: "cu", x: 0.88, y: 0.88, r: 0.07 },
+  };
+  // (u, v) in [0,1]^2 of the square phantom
+  function phantomHit(u, v) {
+    const m = PHANTOM.marker;
+    if (Math.hypot(u - m.x, v - m.y) <= m.r) return "cu";
+    const dx = u - PHANTOM.cx, dy = v - PHANTOM.cy;
+    let hit = null;
+    for (const r of PHANTOM.rings) if ((dx / r.rx) ** 2 + (dy / r.ry) ** 2 <= 1) hit = r.k; // rings go outside-in
+    return hit;
+  }
+
+  return {
+    D2R, TIMING_GUARD_MS, BASE, SEQ_RANGES, PRESETS, PARAM_DEFAULTS, rangeOf,
+    t2star, mxy, mzBefore90, fseEchoTime, epiTiming, spoiledGreMz, pulses180, mzConverted, mzTraj, seqSignal,
+    nullTI, nullTIDetail, irMzAtTI, irTiBounds, bssfpSteady,
+    epgState, epgRf, epgRfChecked, epgRelax, epgDephase, epgRunTR, epgFse, refocusAngles, isIdealRefocus,
+    fseCentreEcho, fseAnalyticSignal, fseKspace,
+    buildTiming, validateTiming, validate, acquisitionInfo, allEvents,
+    PHANTOM, phantomHit,
+  };
+})();
+if (typeof module !== "undefined" && module.exports) module.exports = MRI;
+// CORE-END
+const { D2R, t2star, mxy, mzBefore90, fseEchoTime, spoiledGreMz, pulses180, mzConverted, mzTraj, seqSignal, nullTIDetail, irMzAtTI, irTiBounds, epgFse, isIdealRefocus, fseCentreEcho, fseKspace, buildTiming, acquisitionInfo, bssfpSteady, rangeOf } = MRI;
+// UI
+const $ = (id) => document.getElementById(id);
+const SEQ_IDS = ["se", "fse", "gre", "epi", "ir", "bssfp"];
+// Tissue colours and illustrative proton densities (relative, CSF = 1). T1/T2 come from FIELD below.
+const TISSUES = {
+  wm: { n: "White matter", pd: 0.7, c: "#5ee6b0" },
+  gm: { n: "Grey matter", pd: 0.8, c: "#b69cff" },
+  csf: { n: "CSF", pd: 1.0, c: "#5cc8ff" },
+  fat: { n: "Fat", pd: 0.9, c: "#ffd24a" },
+  cu: { n: "Custom", pd: 0.85, c: "#ff7bd0" },
+};
+const KEYS = ["tr", "te", "ti", "fa", "etl", "esp", "ra", "rb", "tp", "t1", "t2", "pd"],
+  CUSTOM = ["t1", "t2", "pd"];
+const META = {
+  tr: ["TR", "ms"],
+  te: ["TE", "ms"],
+  ti: ["TI", "ms"],
+  fa: ["Flip α", "°"],
+  etl: ["ETL", "echoes"],
+  esp: ["ESP", "ms"],
+  ra: ["Refocus α₁", "°"],
+  rb: ["Refocus αₙ", "°"],
+  tp: ["T2′", "ms"],
+  t1: ["T1", "ms"],
+  t2: ["T2", "ms"],
+  pd: ["ρ", "rel"],
+};
+const TIPS = {
+  tr: "Repetition time: the time between successive excitations. A short TR emphasises T1 differences.",
+  te: "Echo time: the delay from excitation to the echo. A long TE emphasises T2 (or T2*) differences. For FSE, TEeff is quantised to an acquired echo; the displayed TE equals echoIndex × ESP.",
+  ti: "Inversion time: the delay between the 180° inversion pulse and the 90° excitation. Choose it to null a tissue.",
+  fa: "Flip angle of the excitation pulse, in degrees.",
+  etl: "Echo train length: echoes collected per excitation (FSE) or lines per read-out (EPI).",
+  esp: "Echo spacing: the time between consecutive echoes in the train.",
+  ra: "FSE refocusing flip angle of the first echo. 180° is the ideal pulse; lower angles reduce SAR but create stimulated echoes (modelled with the extended phase graph).",
+  rb: "FSE refocusing flip angle of the last echo. The angle changes linearly along the train from the first to the last value (variable refocusing flip angles).",
+  tp: "T2′: extra dephasing from field inhomogeneity, 1/T2* = 1/T2 + 1/T2′. One illustrative value shared by all tissues.",
+  t1: "Longitudinal relaxation time (T1) of the custom tissue.",
+  t2: "Transverse relaxation time (T2) of the custom tissue.",
+  pd: "Relative proton density of the custom tissue (CSF = 1).",
+};
+const BRIEF = {
+  se: "90° then a 180° refocusing pulse. Contrast from T1 (via TR) and true T2 (via TE).",
+  fse: "Echo train after one 90° pulse (extended phase graph). Contrast set by the k-space-centre echo; refocusing angle matters.",
+  gre: "Flip angle α, no 180° pulse. Flip-angle and T2* weighting.",
+  epi: "Whole k-space in one shot. Very fast, T2*-weighted.",
+  ir: "Starts with a 180° inversion. TI can null a tissue (CSF in FLAIR, fat in STIR).",
+  bssfp: "Balanced steady state. Contrast follows T2/T1; fluids bright.",
+};
+const ABBR = {
+  se: ["SE", "Spin echo"],
+  fse: ["FSE", "Fast spin echo"],
+  gre: ["GRE", "Gradient echo"],
+  epi: ["EPI", "Echo-planar"],
+  ir: ["IR", "FLAIR · STIR"],
+  bssfp: ["bSSFP", "Balanced SSFP"],
+};
+// ---------------------------------------------------------------------------------------------------------------------
+// Tissue relaxation data with provenance. Only values that were read from the cited abstracts are marked as sourced;
+// everything else is labelled illustrative. T1, T2 and proton density are tracked separately.
+//   wright: Wright PJ et al., MAGMA 2008;21:121-130 (MPRAGE, 4 healthy subjects, cortical grey matter and white matter,
+//           mean ± SD) - T1 of WM and GM at 1.5, 3 and 7 T.
+//   rooney: Rooney WD et al., Magn Reson Med 2007;57:308-318 (3 healthy subjects) - ventricular CSF T1 = 4.3 ± 0.2 s,
+//           independent of B0.
+// ---------------------------------------------------------------------------------------------------------------------
+const REFS = {
+  wright: "Wright 2008",
+  rooney: "Rooney 2007",
+};
+const FIELD = {
+  1.5: {
+    wm: { t1: 646, t1sd: 32, t1src: "wright", t2: 80 },
+    gm: { t1: 1197, t1sd: 134, t1src: "wright", t2: 95 },
+    csf: { t1: 4300, t1sd: 200, t1src: "rooney", t2: 2000 },
+    fat: { t1: 260, t2: 80 },
+  },
+  3: {
+    wm: { t1: 838, t1sd: 50, t1src: "wright", t2: 80 },
+    gm: { t1: 1607, t1sd: 112, t1src: "wright", t2: 110 },
+    csf: { t1: 4300, t1sd: 200, t1src: "rooney", t2: 2000 },
+    fat: { t1: 380, t2: 70 },
+  },
+  7: {
+    wm: { t1: 1126, t1sd: 97, t1src: "wright", t2: 55 },
+    gm: { t1: 1939, t1sd: 149, t1src: "wright", t2: 60 },
+    csf: { t1: 4300, t1sd: 200, t1src: "rooney", t2: 1500 },
+    fat: { t1: 450, t2: 45 },
+  },
+}; // T2 of all tissues, T1 of fat and all proton densities: illustrative, unverified
+const MODEL_NOTE =
+  '<p class="note">Every 180° pulse inverts the longitudinal magnetisation that has regrown so far, and this is included (the test suite compares it with an independent Bloch simulation). For TE ≪ TR it reduces to the textbook forms ρ(1−e<sup>−TR/T1</sup>)e<sup>−TE/T2</sup> (SE) and ρ|1−2e<sup>−TI/T1</sup>+e<sup>−TR/T1</sup>|e<sup>−TE/T2</sup> (IR).</p>';
+const TIMING_NOTE =
+  '<p class="note"><b>Timing model.</b> Validation, the timing diagram and the acquisition summary all use one list of events (RF pulses, slice, phase and read-out gradient lobes, ADC windows). A parameter set is accepted only if no event overlaps another on the same axis, gradients and ADC stay at least 0.05 ms away from every RF pulse, and the last event of the TR ends at least 0.05 ms before the next excitation block. Event durations are nominal and scale with TE, ESP or TR; they are not vendor hardware limits.</p>';
+const ICON = {
+  minus:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M3 8h10"/></svg>',
+  sliders:
+    '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M2 4h12M2 8h12M2 12h12"/><circle cx="5" cy="4" r="1.7" fill="currentColor"/><circle cx="11" cy="8" r="1.7" fill="currentColor"/><circle cx="7" cy="12" r="1.7" fill="currentColor"/></svg>',
+  pause:
+    '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><rect x="3" y="2" width="4" height="12" rx="1"/><rect x="9" y="2" width="4" height="12" rx="1"/></svg>',
+  play: '<svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg>',
+};
+const LOGK = ["tr", "te", "ti", "t1", "t2", "tp"]; // log-scaled sliders: fine control at short times, still reaches long ones
+const SEQCOL = {
+  se: "108,208,255",
+  fse: "126,224,160",
+  gre: "255,180,84",
+  epi: "255,123,208",
+  ir: "182,156,255",
+  bssfp: "94,230,176",
+};
+const SEQ = {
+  se: {
+    n: "Spin echo (SE)",
+    show: ["tr", "te"],
+    eq: "S = ρ·[1 − 2e<sup>−(TR−TE/2)/T1</sup> + e<sup>−TR/T1</sup>]·e<sup>−TE/T2</sup>",
+    note: "90° excitation, one 180° refocusing pulse at TE/2, echo at TE. Static field dephasing is refocused, so decay follows true T2. Ideal pulses, single-exponential relaxation, steady state over repeated TRs.",
+  },
+  fse: {
+    n: "Fast / turbo spin echo (FSE/TSE)",
+    show: ["tr", "te", "etl", "esp", "ra", "rb"],
+    eq: "S = ρ·|F<sub>0</sub>(n<sub>c</sub>)| &nbsp; (extended phase graph, n<sub>c</sub> = TE<sub>eff</sub>/ESP = k-space-centre echo). For ideal 180° pulses: S = ρ·M<sub>z</sub>(TR)·e<sup>−TE<sub>eff</sub>/T2</sup>",
+    note: "One 90° pulse then ETL refocusing pulses. The echo train is computed with an extended phase graph (EPG): T1 and T2 relaxation, RF rotations with the refocusing angle varying linearly from the first to the last echo, stimulated echoes, and the periodic steady state over TRs (solved exactly). TEeff is restricted to an acquired echo (the TE control snaps to echoIndex × ESP) and the signal in the table is the amplitude of that echo. The T2 plot shows the echo amplitudes of the train; the dashed grey curve is the ideal 180° envelope of the selected tissue. The point-spread-function width shown under the plot comes from a simplified k-space model: k-space is split into ETL bands, echo i fills the band that lies (i − n<sub>c</sub>) bands from the centre (periodically wrapped), so amplitude changes along the train filter k-space and blur the image. Assumptions: hard RF pulses, no slice-profile or B1 error, perfect spoiling at the end of every TR (all transverse and longitudinally modulated states are discarded), no diffusion, no magnetisation transfer or J-coupling (real fat is brighter in FSE than predicted here), no SAR model. Vendor k-space orderings differ from the one modelled.",
+  },
+  gre: {
+    n: "Gradient echo (spoiled GRE)",
+    show: ["tr", "te", "fa", "tp"],
+    eq: "S = ρ·sinα·(1−E1)/(1−E1·cosα)·e<sup>−TE/T2*</sup>, &nbsp; E1 = e<sup>−TR/T1</sup>, &nbsp; 1/T2* = 1/T2 + 1/T2′",
+    note: "Excitation with flip angle α and no 180° pulse: field-inhomogeneity dephasing is NOT refocused, so decay follows T2*. Assumes perfect RF spoiling and steady state. T2′ is one user-set value for all tissues (illustrative; real T2′ varies with local susceptibility). Flip angle is an extra contrast control.",
+  },
+  epi: {
+    n: "Echo-planar imaging (single-shot GE-EPI)",
+    show: ["tr", "te", "fa", "tp", "etl", "esp"],
+    eq: "S = ρ·sinα·(1−E1)/(1−E1·cosα)·e<sup>−TE/T2*</sup> &nbsp; (read-out = ETL·ESP; TE is the centre of echo floor(ETL/2); prephaser starts at TE − (floor(ETL/2) + 1.25)·ESP)",
+    note: "Whole k-space is read after one excitation with a train of gradient echoes; TE is the centre of the ky = 0 echo, using zero-based echo index floor(ETL/2). The read-out prephaser Gx occupies TE − (floor(ETL/2) + 1.25)·ESP to TE − (floor(ETL/2) + 0.75)·ESP; the first read-out begins at TE − (floor(ETL/2) + 0.5)·ESP. The phase prephaser Gy starts at the same time and its area cancels the phase-encode blips before the centre echo. Validation uses the shared timing model: the prephaser must start at least 0.05 ms after the end of the excitation pulse and the last ADC window must end at least 0.05 ms before the next excitation block. Not modelled: T2* blurring along the phase direction, geometric distortion, Nyquist ghosts, fat shift. A spin-echo EPI variant would replace T2* by T2 and is not included.",
+  },
+  ir: {
+    n: "Inversion recovery (IR, FLAIR, STIR)",
+    show: ["tr", "te", "ti"],
+    eq: "S = ρ·|1 − (1 + M<sub>pre</sub>)e<sup>−TI/T1</sup>|·e<sup>−TE/T2</sup> &nbsp; (M<sub>pre</sub> = Mz before the inversion; null: M<sub>z</sub>(TI) = 0, solved numerically)",
+    note: "180° inversion, wait TI, then a spin-echo read-out. Magnitude reconstruction: the sign of Mz is lost, so signal is |Mz|. Choosing TI at a tissue's null suppresses it: long TI for CSF (FLAIR), short TI for fat (STIR). The null TI shown under the T1 plot solves M<sub>z</sub>(TI) = 0 with exactly the magnetisation model used for the signal (bracketed bisection inside the TI range that the timing model allows; the residual is checked, and 'not available' is reported when no null exists). Ideal inversion, no slice-profile or B1 effects.",
+  },
+  bssfp: {
+    n: "Balanced SSFP (bSSFP)",
+    show: ["tr", "fa"],
+    eq: "S = ρ(1−E1)·sinα·e<sup>−TR/2T2</sup> / [1 − (E1−E2)cosα − E1E2], &nbsp; E1 = e<sup>−TR/T1</sup>, E2 = e<sup>−TR/T2</sup>",
+    note: "Exact on-resonance steady state with alternating-phase RF and TE = TR/2 (the test suite reproduces it with a Bloch simulation run to steady state); for TR ≪ T1, T2 it reduces to ρ·sinα / [(T1/T2)(1−cosα) + (1+cosα)]. Contrast follows T2/T1 and α, with only a weak TR dependence. Not modelled: banding artefacts, off-resonance, the approach to steady state, fat/water phase effects.",
+  },
+};
+SEQ_IDS.forEach((q) => {
+  SEQ[q].pr = MRI.PRESETS[q];
+  SEQ[q].rng = MRI.SEQ_RANGES[q];
+});
+// Responsive page layout; expanded controls occupy a reserved desktop rail.
+/* layout() also clamps the draggable panel to the current viewport. */
+function layout() {
+  document.body.classList.toggle("controls-min", S.min);
+  $("sCtl").classList.toggle("min", S.min);
+  $("asideIn").classList.toggle("min", S.min);
+  placePanel();
+}
+const PAN = { dx: 0, dy: 0 }; // drag offset (real px) from the default top-right position
+function placePanel() {
+  const as = $("sCtl"),
+    vw = document.documentElement.clientWidth || innerWidth,
+    vh = innerHeight,
+    w = as.offsetWidth,
+    h = as.offsetHeight,
+    M = 12,
+    x0 = vw - w - M; // real pixels; the panel stays inside the window
+  const x = Math.min(Math.max(0, x0 + PAN.dx), Math.max(0, vw - w)),
+    y = Math.min(Math.max(0, M + PAN.dy), Math.max(0, vh - h));
+  PAN.dx = x - x0;
+  PAN.dy = y - M;
+  as.style.left = x + "px";
+  as.style.top = y + "px";
+}
+const RMQ = window.matchMedia ? matchMedia("(prefers-reduced-motion: reduce)") : null;
+const RM = !!(RMQ && RMQ.matches); // start paused if the system asks for reduced motion
+const S = {
+  min: innerWidth < 1024,
+  field: "3",
+  tissue: "wm",
+  hover: null,
+  seq: "se",
+  tr: 2000,
+  te: 50,
+  ti: 400,
+  fa: 30,
+  etl: 8,
+  esp: 10,
+  ra: 180,
+  rb: 180,
+  echoIndex: null,
+  tp: 100,
+  t1: 1000,
+  t2: 100,
+  pd: 0.85,
+  paused: RM,
+  speed: 1,
+  pi: 3,
+  phase: 0,
+};
+function tissues(f) {
+  const F = FIELD[f || S.field];
+  for (const k in F) {
+    TISSUES[k].t1 = F[k].t1;
+    TISSUES[k].t2 = F[k].t2;
+    TISSUES[k].t1sd = F[k].t1sd;
+    TISSUES[k].t1src = F[k].t1src;
+  }
+  TISSUES.cu.t1 = S.t1;
+  TISSUES.cu.t2 = S.t2;
+  TISSUES.cu.pd = S.pd;
+  return TISSUES;
+}
+function acq() {
+  return {
+    field: S.field,
+    seq: S.seq,
+    tr: S.tr,
+    te: S.te,
+    ti: S.ti,
+    fa: S.fa,
+    etl: S.etl,
+    esp: S.esp,
+    ra: S.ra,
+    rb: S.rb,
+    tp: S.tp,
+    echoIndex: S.echoIndex,
+  };
+}
+function sigs(p) {
+  const T = tissues(p.field);
+  return Object.keys(T).map((k) => ({
+    k,
+    n: T[k].n,
+    c: T[k].c,
+    s: seqSignal(p.seq, T[k].pd, T[k].t1, T[k].t2, p),
+  }));
+}
+function rng(k, q, state = S) {
+  q = q || state.seq;
+  if (k === "te" && q === "fse")
+    return { min: state.esp, max: state.etl * state.esp, step: state.esp };
+  return rangeOf(k, q);
+}
+function candidateFor(k, v) {
+  const c = { ...S, [k]: v };
+  if (c.seq === "fse") {
+    let echoIndex = Number.isInteger(c.echoIndex)
+      ? c.echoIndex
+      : Math.max(1, Math.round(c.te / c.esp));
+    if (k === "te") echoIndex = Math.round(v / c.esp);
+    echoIndex = Math.min(c.etl, Math.max(1, echoIndex));
+    c.echoIndex = echoIndex;
+    c.te = fseEchoTime(echoIndex, c.esp, c.etl);
+  }
+  return c;
+}
+function vis() {
+  return KEYS.filter((k) => CUSTOM.includes(k) || SEQ[S.seq].show.includes(k));
+}
+function setErr(m) {
+  $("err").textContent = m || "";
+}
+const check = (c) => MRI.validate(c); // the shared timing model decides
+function setParam(k, v) {
+  const r = rng(k, S.seq, S),
+    m = META[k];
+  if (!Number.isFinite(v)) {
+    setErr("Enter a number for " + m[0] + ".");
+    syncInputs();
+    return false;
+  }
+  if (v < r.min - 1e-9 || v > r.max + 1e-9) {
+    setErr(`${m[0]} must be between ${r.min} and ${r.max} ${m[1]}.`);
+    syncInputs();
+    return false;
+  }
+  const c = candidateFor(k, v),
+    e = check(c);
+  if (e) {
+    setErr(e);
+    syncInputs();
+    return false;
+  }
+  setErr("");
+  S[k] = c[k];
+  if (S.seq === "fse") {
+    S.echoIndex = c.echoIndex;
+    S.te = c.te;
+  }
+  S.pi = null;
+  update();
+  return true;
+}
+function loadSeq(q, i) {
+  const { n, ...v } = SEQ[q].pr[i];
+  Object.assign(S, MRI.PARAM_DEFAULTS, { echoIndex: null }, v, { seq: q, pi: i });
+  if (q === "fse") {
+    S.echoIndex = Math.min(S.etl, Math.max(1, Math.round(S.te / S.esp)));
+    S.te = fseEchoTime(S.echoIndex, S.esp, S.etl);
+  }
+  setErr("");
+  buildPresetBtns();
+  update();
+}
+function resetAll() {
+  Object.assign(S, {
+    phase: 0,
+    t1: 1000,
+    t2: 100,
+    pd: 0.85,
+    speed: 1,
+    field: "3",
+    tissue: "wm",
+    hover: null,
+    paused: !!(RMQ && RMQ.matches),
+  });
+  $("speed").value = 1;
+  $("speedV").textContent = "1.0×";
+  setFill($("speed"));
+  loadSeq("se", 3);
+}
+function buildPresetBtns() {
+  const b = $("presetBtns");
+  b.innerHTML = "";
+  SEQ[S.seq].pr.forEach((p, i) => {
+    const x = document.createElement("button");
+    x.type = "button";
+    x.textContent = p.n;
+    x.onclick = () => loadSeq(S.seq, i);
+    b.appendChild(x);
+  });
+}
+// ---- UI build
+KEYS.forEach((k) => {
+  const r = document.createElement("div");
+  r.className = "row";
+  r.id = "row_" + k;
+  r.innerHTML = `<label for="n_${k}" title="${TIPS[k]} (double-click to reset)">${META[k][0]} <i>${META[k][1]}</i></label><input type="range" id="r_${k}" aria-label="${META[k][0]} slider"><input type="number" id="n_${k}" title="${TIPS[k]}">`;
+  $(CUSTOM.includes(k) ? "custom" : "params").appendChild(r);
+  $("r_" + k).addEventListener("input", (e) => {
+    const raw = fromSlider(k, +e.target.value),
+      v = nearestValid(k, raw);
+    setParam(k, v);
+    if (v !== raw) {
+      const m = check(candidateFor(k, raw));
+      if (m) setErr("Stopped at the limit. " + m);
+    }
+  });
+  r.querySelector("label").addEventListener("dblclick", () => resetParam(k));
+  $("n_" + k).addEventListener("change", (e) => {
+    setParam(k, e.target.value === "" ? NaN : +e.target.value);
+    e.target.value = S[k];
+  });
+});
+SEQ_IDS.forEach((k) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.id = "sq_" + k;
+  b.className = "seqbtn";
+  b.style.setProperty("--c", SEQCOL[k]);
+  b.title = SEQ[k].n;
+  b.innerHTML = `<b>${ABBR[k][0]}</b><small>${ABBR[k][1]}</small>`;
+  b.onclick = () => loadSeq(k, k === "se" ? 3 : 0);
+  $("seqGrid").appendChild(b);
+});
+["1.5", "3", "7"].forEach((f) => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.dataset.f = f;
+  b.textContent = f + " T";
+  b.title = "Field strength " + f + " T";
+  b.onclick = () => {
+    S.field = f;
+    update();
+  };
+  $("fieldBtns").appendChild(b);
+});
+$("speed").oninput = (e) => {
+  S.speed = +e.target.value;
+  $("speedV").textContent = S.speed.toFixed(1) + "×";
+  setFill(e.target);
+  setSpeedText();
+};
+$("reset").onclick = resetAll;
+let DRAGGED = false;
+$("minBtn").onclick = (e) => {
+  if (DRAGGED || (S.min && e.detail > 0)) return;
+  S.min = !S.min;
+  update();
+}; // a mouse/touch click on the round icon is handled on pointer-up (the header holds the pointer capture); keyboard clicks (detail 0) toggle here
+// drag the panel by its header
+{
+  let d = null;
+  const hd = $("panelHead");
+  hd.addEventListener("pointerdown", (e) => {
+    if (!S.min && e.target.closest("button")) return;
+    d = { x: e.clientX, y: e.clientY, dx: PAN.dx, dy: PAN.dy, m: false };
+    hd.setPointerCapture && hd.setPointerCapture(e.pointerId);
+  });
+  hd.addEventListener("pointermove", (e) => {
+    if (!d) return;
+    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 4) d.m = true;
+    if (d.m) {
+      PAN.dx = d.dx + e.clientX - d.x;
+      PAN.dy = d.dy + e.clientY - d.y;
+      placePanel();
+    }
+  });
+  const end = (e) => {
+    if (d) {
+      if (d.m) {
+        DRAGGED = true;
+        setTimeout(() => {
+          DRAGGED = false;
+        }, 0);
+      } else if (S.min && e.type === "pointerup") {
+        DRAGGED = true;
+        setTimeout(() => {
+          DRAGGED = false;
+        }, 0);
+        S.min = false;
+        update();
+      }
+    }
+    d = null;
+  };
+  hd.addEventListener("pointerup", end);
+  hd.addEventListener("pointercancel", end);
+}
+$("pause").onclick = () => {
+  S.paused = !S.paused;
+  updatePauseButton();
+  if (S.paused) stopAnimation();
+  else startAnimation();
+};
+function updatePauseButton() {
+  $("pause").setAttribute("aria-pressed", S.paused);
+  $("pause").innerHTML = S.paused
+    ? ICON.play + "<span>Resume animation</span>"
+    : ICON.pause + "<span>Pause animation</span>";
+}
+function nearestValid(k, v) {
+  const r = rng(k, S.seq, S);
+  if (!check(candidateFor(k, v))) return v;
+  const dir = Math.sign(S[k] - v) || 1;
+  for (let x = v, i = 0; i < 5000; i++) {
+    x = Math.round((x + dir * r.step) * 1000) / 1000;
+    if (x < r.min || x > r.max) break;
+    if (!check(candidateFor(k, x))) return x;
+    if ((x - S[k]) * dir >= 0) break;
+  }
+  return S[k];
+} // slider drags stop at the nearest valid value instead of snapping back
+function toSlider(k, v) {
+  const r = rng(k);
+  return LOGK.includes(k)
+    ? Math.round((1000 * Math.log(Math.max(v, r.min) / r.min)) / Math.log(r.max / r.min))
+    : v;
+}
+function fromSlider(k, s) {
+  const r = rng(k);
+  if (!LOGK.includes(k)) return s;
+  const v = r.min * Math.exp((s / 1000) * Math.log(r.max / r.min));
+  return Math.min(r.max, Math.max(r.min, Math.round(v / r.step) * r.step));
+}
+function setFill(el) {
+  const a = +el.min,
+    b = +el.max;
+  el.style.setProperty("--p", ((+el.value - a) / (b - a)) * 100 + "%");
+}
+function resetParam(k) {
+  const i = S.pi != null ? S.pi : S.seq === "se" ? 3 : 0,
+    pr = SEQ[S.seq].pr[i],
+    D = { ...MRI.PARAM_DEFAULTS, t1: 1000, t2: 100, pd: 0.85 },
+    v = pr && pr[k] !== undefined ? pr[k] : D[k];
+  if (v !== undefined) setParam(k, v);
+}
+function syncInputs() {
+  const v = vis();
+  KEYS.forEach((k) => {
+    const r = rng(k, S.seq, S),
+      row = $("row_" + k),
+      sl = $("r_" + k),
+      nu = $("n_" + k);
+    row.style.display = v.includes(k) ? "" : "none";
+    if (LOGK.includes(k)) {
+      sl.min = 0;
+      sl.max = 1000;
+      sl.step = 1;
+    } else {
+      sl.min = r.min;
+      sl.max = r.max;
+      sl.step = r.step;
+    }
+    nu.min = r.min;
+    nu.max = r.max;
+    nu.step = r.step;
+    sl.value = toSlider(k, S[k]);
+    sl.setAttribute("aria-valuetext", S[k] + " " + META[k][1]);
+    setFill(sl);
+    nu.value = S[k];
+  });
+}
+
+// ---- drawing -----------------------------------------------------------------------------------------------------------
+// Rendering is split in two: a static layer (grid, curves, diagram, labels) that is redrawn only when the state (VER),
+// the canvas size or the device pixel ratio changes, and a dynamic layer (moving cursors and their labels) drawn on top of a
+// copy of the static layer on every animation frame.
+const STAT = { staticDraws: 0, dynamicDraws: 0, frames: 0, phantomDraws: 0 }; // exposed for the browser tests
+let VER = 0;
+const LAYERS = {};
+function fit(c, square) {
+  const d = window.devicePixelRatio || 1,
+    w = c.clientWidth;
+  if (!w) return null;
+  c._a0 = c._a0 || c.height / c.width;
+  const asp = square
+    ? 1
+    : Math.min(c.dataset.narrow && w < 600 ? +c.dataset.narrow : c._a0, Math.max(0.3, (innerHeight * 0.7) / w)); // never taller than 70% of the window
+  const W = Math.round(w * d),
+    H = square ? W : Math.round(w * asp * d);
+  if (c.width !== W || c.height !== H) {
+    c.width = W;
+    c.height = H;
+  }
+  const g = c.getContext("2d");
+  g.setTransform(d, 0, 0, d, 0, 0);
+  return { g, w: W / d, h: H / d, d };
+}
+function layer(c, id, build) {
+  const f = fit(c);
+  if (!f) return null;
+  let L = LAYERS[id];
+  if (!L) L = LAYERS[id] = { cv: document.createElement("canvas"), key: "", view: null };
+  const key = VER + "|" + c.width + "x" + c.height;
+  if (L.key !== key) {
+    L.cv.width = c.width;
+    L.cv.height = c.height;
+    const gg = L.cv.getContext("2d");
+    gg.setTransform(f.d, 0, 0, f.d, 0, 0);
+    L.view = build(gg, f.w, f.h);
+    L.key = key;
+    STAT.staticDraws++;
+  }
+  f.g.setTransform(1, 0, 0, 1, 0, 0);
+  f.g.clearRect(0, 0, c.width, c.height);
+  f.g.drawImage(L.cv, 0, 0);
+  f.g.setTransform(f.d, 0, 0, f.d, 0, 0);
+  STAT.dynamicDraws++;
+  return { g: f.g, w: f.w, h: f.h, view: L.view };
+}
+// round tick positions (1, 2, 5 x 10^k) inside [lo, hi]
+function niceTicks(lo, hi, n) {
+  const raw = (hi - lo) / n,
+    mag = Math.pow(10, Math.floor(Math.log10(raw))),
+    f = raw / mag,
+    step = (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * mag,
+    out = [];
+  for (let v = Math.ceil(lo / step - 1e-9) * step; v <= hi + step * 1e-9; v += step) out.push(+v.toFixed(10));
+  const dec = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
+  return { ticks: out, fmt: (v) => v.toFixed(dec) };
+}
+function plot(g, w, h, o) {
+  const L = 48,
+    R = 22,
+    T = 10,
+    B = 34,
+    pw = w - L - R,
+    ph = h - T - B;
+  g.clearRect(0, 0, w, h);
+  g.font = "12px system-ui";
+  const all = o.curves
+      .flatMap((cv) => Array.from({ length: 41 }, (_, i) => cv.f((o.xmax * i) / 40)))
+      .filter(Number.isFinite),
+    y0 = Math.min(0, Math.min(...all) * 1.1),
+    y1 = Math.max(0.05, Math.max(...all) * 1.1),
+    ys = y1 - y0;
+  const X = (x) => L + (x / o.xmax) * pw,
+    Y = (y) => T + ph - ((y - y0) / ys) * ph;
+  g.strokeStyle = "rgba(255,255,255,.14)";
+  g.fillStyle = "#a3b0c0";
+  g.lineWidth = 1;
+  const ty = niceTicks(y0, y1, 4),
+    tx = niceTicks(0, o.xmax, 4);
+  ty.ticks.forEach((y) => {
+    g.beginPath();
+    g.moveTo(L, Y(y));
+    g.lineTo(L + pw, Y(y));
+    g.stroke();
+    g.textAlign = "right";
+    g.fillText(ty.fmt(y), L - 4, Y(y) + 4);
+  });
+  tx.ticks.forEach((x) => {
+    g.textAlign = "center";
+    g.fillText(tx.fmt(x), X(x), T + ph + 14);
+  });
+  if (y0 < 0) {
+    g.strokeStyle = "#8899aa";
+    g.beginPath();
+    g.moveTo(L, Y(0));
+    g.lineTo(L + pw, Y(0));
+    g.stroke();
+  }
+  g.fillStyle = "#a3b0c0";
+  g.textAlign = "center";
+  g.fillText(o.xl, L + pw / 2, h - 4);
+  g.save();
+  g.translate(11, T + ph / 2);
+  g.rotate(-Math.PI / 2);
+  g.fillText(o.yl, 0, 0);
+  g.restore();
+  o.curves.forEach((cv) => {
+    g.strokeStyle = cv.c;
+    g.lineWidth = cv.bold ? 3.2 : 1.6;
+    g.globalAlpha = cv.bold ? 1 : 0.8;
+    g.setLineDash(cv.d || []);
+    g.beginPath();
+    let pen = false;
+    for (let i = 0; i <= 200; i++) {
+      const x = (o.xmax * i) / 200,
+        y = cv.f(x);
+      if (!Number.isFinite(y)) {
+        pen = false;
+        continue;
+      }
+      pen ? g.lineTo(X(x), Y(y)) : g.moveTo(X(x), Y(y));
+      pen = true;
+    }
+    g.stroke();
+    g.setLineDash([]);
+  });
+  g.globalAlpha = 1;
+  (o.pts || []).forEach((q) => {
+    g.fillStyle = q.c;
+    g.beginPath();
+    g.arc(X(q.x), Y(q.y), q.big ? 5.5 : 3, 0, 7);
+    g.fill();
+    if (q.big) {
+      g.strokeStyle = "#fff";
+      g.lineWidth = 1.5;
+      g.stroke();
+    }
+  });
+  o.vl.forEach((v) => {
+    if (v.x > o.xmax || v.x < 0) return;
+    g.strokeStyle = v.c;
+    g.lineWidth = 1;
+    g.setLineDash(v.d || []);
+    g.beginPath();
+    g.moveTo(X(v.x), T);
+    g.lineTo(X(v.x), T + ph);
+    g.stroke();
+    g.setLineDash([]);
+    g.fillStyle = v.c;
+    const rt = X(v.x) > L + pw * 0.6;
+    g.textAlign = rt ? "right" : "left";
+    g.fillText(v.l, X(v.x) + (rt ? -4 : 4), T + 12 + (v.row || 0) * 14);
+  });
+  g.textAlign = "left";
+  let lx = L + 6,
+    ly = T + ph - 16;
+  Object.keys(o.leg).forEach((n) => {
+    const wd = g.measureText(n).width + 30;
+    if (lx + wd - 14 > L + pw) {
+      lx = L + 6;
+      ly -= 15;
+    }
+    g.fillStyle = o.leg[n];
+    g.fillRect(lx, ly, 10, 10);
+    g.fillStyle = "#e8edf3";
+    g.fillText(n, lx + 14, ly + 9);
+    lx += wd;
+  });
+  return { X, Y, T, ph, L, pw, xmax: o.xmax };
+}
+function plotCursor(g, view, x, label, row) {
+  const px = view.X(x);
+  g.strokeStyle = "#fff";
+  g.lineWidth = 1;
+  g.setLineDash([4, 3]);
+  g.beginPath();
+  g.moveTo(px, view.T);
+  g.lineTo(px, view.T + view.ph);
+  g.stroke();
+  g.setLineDash([]);
+  g.fillStyle = "#fff";
+  g.font = "12px system-ui";
+  const rt = px > view.L + view.pw * 0.55;
+  g.textAlign = rt ? "right" : "left";
+  g.fillText(label, px + (rt ? -4 : 4), view.T + 12 + (row || 1) * 14);
+}
+function curvesFor(fn) {
+  const T = tissues(),
+    leg = {};
+  return {
+    leg,
+    curves: Object.keys(T).map((k) => {
+      leg[T[k].n] = T[k].c;
+      return { c: T[k].c, bold: k === S.tissue, f: (x) => fn(T[k], x) };
+    }),
+  };
+}
+const fmt = (v) => (v < 10 ? v.toFixed(2) : v < 100 ? v.toFixed(1) : v.toFixed(0));
+const CLK = { t: 0, t1: 0, t2: 0 }; // cursor times (ms): timing diagram, T1 plot, T2 plot
+function timeAxis(tl, pw) {
+  const m = [];
+  tl.segs
+    .map((x) => x.slice())
+    .sort((a, b) => a[0] - b[0])
+    .forEach((x) => {
+      const q = m[m.length - 1];
+      if (q && x[0] - q[1] < 0.25 * (q[1] - q[0] + (x[1] - x[0]))) q[1] = Math.max(q[1], x[1]);
+      else m.push(x);
+    });
+  const gap = 18,
+    D = m.reduce((a, x) => a + x[1] - x[0], 0),
+    k = (pw - gap * (m.length - 1)) / D,
+    st = [];
+  let x0 = 0;
+  m.forEach((x) => {
+    st.push(x0);
+    x0 += (x[1] - x[0]) * k + gap;
+  });
+  const end = (i) => st[i] + (m[i][1] - m[i][0]) * k;
+  const px = (t) => {
+    if (t <= m[0][0]) return 0;
+    for (let i = 0; i < m.length; i++) {
+      if (t <= m[i][1]) return st[i] + (t - m[i][0]) * k;
+      if (i + 1 < m.length && t < m[i + 1][0]) return end(i) + ((t - m[i][1]) / (m[i + 1][0] - m[i][1])) * gap;
+    }
+    return end(m.length - 1);
+  };
+  const time = (u) => {
+    for (let i = 0; i < m.length; i++) {
+      if (u <= end(i)) return m[i][0] + Math.max(0, u - st[i]) / k;
+      if (i + 1 < m.length && u < st[i + 1]) return m[i][1] + ((u - end(i)) / gap) * (m[i + 1][0] - m[i][1]);
+    }
+    return m[m.length - 1][1];
+  };
+  const at = (t) => {
+    let best = 0,
+      bd = 1e18;
+    for (let i = 0; i < m.length; i++) {
+      if (t >= m[i][0] && t <= m[i][1]) return st[i] + (t - m[i][0]) * k;
+      const e = t < m[i][0] ? m[i][0] : m[i][1],
+        d = Math.abs(t - e);
+      if (d < bd) {
+        bd = d;
+        best = st[i] + (e - m[i][0]) * k;
+      }
+    }
+    return best;
+  }; // times outside every window snap to the nearest edge
+  return { m, st, k, gap, px, time, at };
+}
+// Each animation runs at constant speed on its own time axis and all restart together every cycle (6 s at 1x):
+// T1 plot: t1 = phase x TR; T2 plot: t2 = phase x (its x range); timing diagram: constant speed along the drawn axis.
+function t2span(p) {
+  const q = p.seq;
+  return q === "bssfp"
+    ? p.tr
+    : q === "gre" || q === "epi"
+      ? Math.max(p.te * 1.6, 40)
+      : q === "fse"
+        ? Math.max(p.etl * p.esp * 1.1, p.te * 1.2, 60)
+        : Math.max(p.te * 1.6, 60);
+}
+// Timing diagram model for the highlighted tissue: events from the shared timing model plus tissue-specific amplitudes.
+function timeline(s, p) {
+  const T = buildTiming(p),
+    ts = t2star(s.t2, p.tp),
+    dec = (d) => Math.exp(-d / s.t2),
+    decs = (d) => Math.exp(-d / ts),
+    t0 = T.ex[0];
+  switch (p.seq) {
+    case "se":
+      T.A = s.pd * mzConverted("se", s.t1, p);
+      T.rel = T.echoes.map((e) => dec(e.t - t0));
+      break;
+    case "fse": {
+      const e = epgFse(s.t1, s.t2, p);
+      T.A = s.pd * e.z0pre;
+      T.rel = Array.from(e.amps, (a) => a / (e.z0pre || 1));
+      break;
+    }
+    case "gre":
+    case "epi":
+      T.mzPre = spoiledGreMz(s.pd, s.t1, p.tr, p.fa);
+      T.A = T.mzPre * Math.sin(p.fa * D2R);
+      T.rel = T.echoes.map((e) => decs(e.t - t0));
+      break;
+    case "ir":
+      T.A = Math.abs(s.pd * mzConverted("ir", s.t1, p));
+      T.rel = T.echoes.map((e) => dec(e.t - p.ti));
+      break;
+    default:
+      T.A = seqSignal("bssfp", s.pd, s.t1, s.t2, p);
+      T.rel = T.echoes.map(() => 1);
+  }
+  return T;
+}
+// Cached diagram model + time axis (rebuilt only when the state or the canvas width changes)
+const SEQM = { key: "", tl: null, ax: null };
+function seqModel() {
+  const pw = $("cSeq").clientWidth - 48,
+    key = VER + "|" + pw;
+  if (SEQM.key !== key && pw > 0) {
+    const p = acq(),
+      s = tissues()[S.tissue];
+    SEQM.tl = timeline(s, p);
+    SEQM.ax = timeAxis(SEQM.tl, pw);
+    SEQM.key = key;
+    SEQM.pw = pw;
+  }
+  return SEQM;
+}
+function clock() {
+  const p = acq(),
+    M = seqModel();
+  if (!M.ax) return;
+  CLK.t = M.ax.time(S.phase * M.pw);
+  CLK.t1 = S.phase * p.tr;
+  CLK.t2 = S.phase * t2span(p);
+}
+function setSpeedText() {
+  const p = acq();
+  document.querySelectorAll("[data-spd]").forEach((el) => {
+    const len = el.dataset.spd === "t1" ? p.tr : t2span(p);
+    el.textContent = `cursor speed ${fmt((len / 6) * S.speed)} ms per real second (constant)`;
+  });
+}
+function buildT1(g, w, h) {
+  const p = acq(),
+    q = p.seq,
+    s = tissues()[S.tissue],
+    a = p.fa * D2R,
+    E = (x) => Math.exp(-x);
+  let info, o;
+  const mz = (t, x) => t.pd * mzTraj(q, t.t1, p, x, t.t2);
+  if (q === "bssfp") {
+    o = {
+      xmax: 90,
+      xl: "flip angle α (°)",
+      yl: "relative signal S",
+      vl: [{ x: p.fa, c: "#ffb454", l: "α" }],
+      ...curvesFor((t, x) => seqSignal(q, t.pd, t.t1, t.t2, { ...p, fa: x })),
+    };
+    info = `<b>${s.n}</b>: T1/T2 = ${(s.t1 / s.t2).toFixed(1)} · S(α=${p.fa}°) = ${seqSignal(q, s.pd, s.t1, s.t2, p).toFixed(3)}. bSSFP contrast follows T1/T2 and α.`;
+  } else if (q === "ir") {
+    const nd = nullTIDetail(s.t1, p.tr, p),
+      bd = irTiBounds(p),
+      TT = tissues(),
+      mp = (t) => mzBefore90(t.t1, p.tr - p.ti, [p.te / 2]), // Mz just before the inversion (steady state)
+      free = (t) => (x) => t.pd * (1 - (1 + mp(t)) * Math.exp(-x / t.t1)), // undisturbed inversion recovery
+      mpre = mp(s),
+      xc = mpre > -1 ? s.t1 * Math.log(1 + mpre) : NaN; // zero crossing of the selected tissue's undisturbed curve
+    const curves = [],
+      leg = {},
+      pts = [];
+    Object.keys(TT).forEach((k) => {
+      const t = TT[k],
+        f = free(t);
+      leg[t.n] = t.c;
+      curves.push({ c: t.c, bold: k === S.tissue, f: (x) => (x <= p.ti ? f(x) : NaN) }); // what the 90° pulse samples
+      curves.push({ c: t.c, bold: false, d: [3, 4], f: (x) => (x >= p.ti ? f(x) : NaN) }); // hypothetical continuation
+      pts.push({ x: p.ti, y: f(p.ti), c: t.c, big: k === S.tissue });
+    });
+    curves.push({ c: "#ffffff", bold: false, d: [1.5, 3], f: (x) => (x >= p.ti ? s.pd * mzTraj(q, s.t1, p, x, s.t2) : NaN) }); // actual, selected tissue
+    leg["dashed: without the 90° (hypothetical)"] = "#8899aa";
+    leg["dotted: actual Mz after the 90° (selected)"] = "#ffffff";
+    o = {
+      xmax: p.tr,
+      xl: "time since inversion t (ms)",
+      yl: "ρ · Mz (relative)",
+      vl: [{ x: p.ti, c: "#ffb454", l: "TI" }],
+      pts,
+      curves,
+      leg,
+    };
+    // Show only the selected tissue's null TI. Plotting a null marker for every
+    // tissue makes the inversion-recovery panel difficult to read.
+    const ABBR_T = { wm: "WM", gm: "GM", csf: "CSF", fat: "Fat", cu: "Custom" };
+    if (nd.ok) {
+      o.vl.push({
+        x: nd.ti,
+        c: s.c,
+        d: [2, 3],
+        l: `${ABBR_T[S.tissue] || s.n} null TI ${nd.ti.toFixed(0)} ms`,
+        row: 1,
+      });
+    }
+    if (Number.isFinite(xc) && xc <= p.tr) o.pts.push({ x: xc, y: 0, c: "#ffffff", big: true });
+    const list = Object.keys(TT)
+      .map((k) => `${TT[k].n} ${(TT[k].pd * irMzAtTI(TT[k].t1, p, p.ti)).toFixed(3)}`)
+      .join(" · ");
+    info = `<b>${s.n}</b> (bold): T1 = ${s.t1} ms. <b>Solid</b>: undisturbed inversion recovery of each tissue up to TI, i.e. the longitudinal magnetisation that the 90° read-out pulse converts; the dots mark ρ·Mz(TI), and the signal is |Mz(TI)|·e<sup>−TE/T2</sup> (magnitude reconstruction). ρ·Mz(TI): ${list}. After TI the 90° pulse sets Mz to 0: the dashed curves show what the recovery would be without it, the white dotted curve is the actual Mz of the selected tissue. The white dot is where the selected tissue's undisturbed curve crosses zero (${Number.isFinite(xc) ? xc.toFixed(1) + " ms" : "never"}); the tissue is nulled when that coincides with TI. ${nd.ok
+      ? `Selected tissue null TI: ${nd.ti.toFixed(1)} ms (bracketed bisection on Mz(TI) = 0; residual ${nd.residual.toExponential(1)}, ${nd.iterations} steps).`
+      : `Selected tissue null TI is unavailable (${nd.reason}).`
+    } TI allowed by the timing model: ${bd.ok ? bd.min.toFixed(1) + "–" + bd.max.toFixed(1) + " ms" : "none"} (TR ${p.tr} ms).`;
+  } else if (q === "gre" || q === "epi") {
+    const Mss = (t) => (t.pd * (1 - E(p.tr / t.t1))) / (1 - Math.cos(a) * E(p.tr / t.t1));
+    o = {
+      xmax: p.tr,
+      xl: "time after RF pulse t (ms)",
+      yl: "ρ · Mz (relative)",
+      vl: [{ x: p.tr, c: "#ffb454", l: "TR" }],
+      ...curvesFor(mz),
+    };
+    info = `<b>${s.n}</b>: T1 = ${s.t1} ms · steady-state Mz before pulse = ${Mss(s).toFixed(3)} · after α=${p.fa}° pulse: ${(Mss(s) * Math.cos(a)).toFixed(3)}`;
+  } else {
+    o = {
+      xmax: p.tr,
+      xl: "time since excitation t (ms)",
+      yl: "ρ · Mz (relative)",
+      vl: [{ x: p.tr, c: "#ffb454", l: "TR" }],
+      ...curvesFor(mz),
+    };
+    const m0 = s.pd * mzConverted(q, s.t1, p, s.t2);
+    info = `<b>${s.n}</b>: T1 = ${s.t1} ms · M0 = ρ = ${s.pd.toFixed(2)} · Mz just before the next 90° = ${m0.toFixed(3)} (${((100 * m0) / s.pd).toFixed(1)}% of M0)${q === "fse" && !isIdealRefocus(p) ? " · Mz follows the EPG Z₀ state (partial refocusing converts some Mz)" : ""}`;
+  }
+  const t = $("t1Info");
+  t.innerHTML = info + (q !== "bssfp" ? ' · <span data-spd="t1"></span>' : "");
+  $("h1t").innerHTML =
+    q === "bssfp"
+      ? "Signal vs flip angle"
+      : q === "ir"
+        ? "Inversion recovery  M<sub>z</sub>(t)"
+        : q === "gre" || q === "epi"
+          ? "Steady-state recovery  M<sub>z</sub>(t)"
+          : "T1 recovery  M<sub>z</sub>(t)";
+  setSpeedText();
+  return plot(g, w, h, o);
+}
+function drawT1() {
+  const r = layer($("cT1"), "t1", buildT1);
+  if (!r) return;
+  const p = acq(),
+    q = p.seq;
+  if (q === "bssfp") return;
+  const s = tissues()[S.tissue],
+    t = Math.max(0, Math.min(CLK.t1, p.tr)),
+    m = s.pd * mzTraj(q, s.t1, p, t, s.t2);
+  plotCursor(r.g, r.view, t, `t = ${fmt(t)} ms · Mz = ${m.toFixed(3)}`, 1);
+}
+function buildT2(g, w, h) {
+  const p = acq(),
+    q = p.seq,
+    s = tissues()[S.tissue],
+    a = p.fa * D2R,
+    E = (x) => Math.exp(-x);
+  let o, info;
+  const m0 = (t) =>
+    q === "ir"
+      ? Math.abs(t.pd * mzConverted(q, t.t1, p))
+      : q === "gre" || q === "epi"
+        ? (t.pd * Math.sin(a) * (1 - E(p.tr / t.t1))) / (1 - Math.cos(a) * E(p.tr / t.t1))
+        : t.pd * mzConverted(q, t.t1, p);
+  if (q === "bssfp") {
+    o = {
+      xmax: p.tr,
+      xl: "time after the α pulse t (ms)",
+      yl: "transverse signal (rel.)",
+      vl: [{ x: p.tr / 2, c: "#ffb454", l: "TE = TR/2" }],
+      ...curvesFor((t, x) => t.pd * bssfpSteady(t.t1, t.t2, p.tr, p.fa).mxyAfter * Math.exp(-x / t.t2)),
+    };
+    info = `<b>${s.n}</b>: in the steady state the transverse magnetisation after each ±α pulse (${(s.pd * bssfpSteady(s.t1, s.t2, p.tr, p.fa).mxyAfter).toFixed(3)}) decays with T2 on resonance and is sampled at TE = TR/2 = ${(p.tr / 2).toFixed(2)} ms: S = ${seqSignal(q, s.pd, s.t1, s.t2, p).toFixed(3)} · <span data-spd="t2"></span>`;
+  } else if (q === "gre" || q === "epi") {
+    o = {
+      xmax: t2span(p),
+      xl: "time after excitation t (ms)",
+      yl: "transverse signal (rel.)",
+      vl: [{ x: p.te, c: "#ffb454", l: "TE" }],
+      ...curvesFor((t, x) => mxy(m0(t), t2star(t.t2, p.tp), x)),
+    };
+    info = `<b>${s.n}</b>: T2 = ${s.t2} ms, T2* = ${t2star(s.t2, p.tp).toFixed(1)} ms (T2′ ${p.tp} ms) · at TE: ${seqSignal(q, s.pd, s.t1, s.t2, p).toFixed(3)}. No 180° pulse, so decay is T2*, faster than T2.`;
+  } else if (q === "fse") {
+    const E_ = p.esp,
+      ci = fseCentreEcho(p),
+      train = (t) => {
+        const e = epgFse(t.t1, t.t2, p);
+        return { xs: [0, ...Array.from({ length: p.etl }, (_, i) => (i + 1) * E_)], ys: [t.pd * e.z0pre, ...Array.from(e.amps, (x) => t.pd * x)] };
+      },
+      lin = (t) => {
+        const { xs, ys } = train(t);
+        return (x) => {
+          if (x > xs[xs.length - 1] + 1e-9) return NaN;
+          const i = Math.min(xs.length - 2, Math.max(0, Math.floor(x / E_ + 1e-12)));
+          return ys[i] + ((ys[i + 1] - ys[i]) * (x - xs[i])) / (xs[i + 1] - xs[i]);
+        };
+      };
+    const cv = curvesFor((t, x) => lin(t)(x)),
+      ideal = (x) => s.pd * mzBefore90(s.t1, p.tr, pulses180("fse", p)) * Math.exp(-x / s.t2),
+      ep = epgFse(s.t1, s.t2, p),
+      ks = fseKspace(ep.amps, ci, 256);
+    cv.curves.push({ c: "#8899aa", d: [4, 4], bold: false, f: ideal });
+    cv.leg["ideal 180° envelope (selected)"] = "#8899aa";
+    o = {
+      xmax: t2span(p),
+      xl: "time after excitation t (ms)",
+      yl: "echo amplitude |F₀| (rel.)",
+      vl: [{ x: p.te, c: "#ffb454", l: "TEeff" }],
+      pts: ep.amps.map((x, i) => ({ x: (i + 1) * E_, y: s.pd * x, c: s.c, big: i + 1 === ci })),
+      ...cv,
+    };
+    const angs = ep.angles;
+    info = `<b>${s.n}</b>: T2 = ${s.t2} ms · refocusing ${angs[0].toFixed(0)}°${Math.abs(angs[0] - angs[angs.length - 1]) > 1e-9 ? "→" + angs[angs.length - 1].toFixed(0) + "°" : ""} · echo train from the extended phase graph (dots, one per refocusing pulse; ringed dot = echo ${ci}/${p.etl}, which fills the centre of k-space) · TEeff = ${p.te} ms: |F₀| = ${(s.pd * ep.amps[ci - 1]).toFixed(3)} (${(100 * ep.amps[ci - 1] / (ep.amps[0] || 1)).toFixed(0)}% of echo 1) · single-exponential value would be ${ideal(p.te).toFixed(3)}. Simplified k-space model: PSF FWHM = ${ks.blur.toFixed(2)}× the unweighted case (1.00 = no blurring) · <span data-spd="t2"></span>`;
+  } else {
+    o = {
+      xmax: t2span(p),
+      xl: "time after excitation t (ms)",
+      yl: "echo amplitude Mxy (rel.)",
+      vl: [{ x: p.te, c: "#ffb454", l: "TE" }],
+      ...curvesFor((t, x) => mxy(m0(t), t.t2, x)),
+    };
+    info = `<b>${s.n}</b>: T2 = ${s.t2} ms · Mxy(0) = ${m0(s).toFixed(3)} · at TE: ${mxy(m0(s), s.t2, p.te).toFixed(3)} (${(100 * E(p.te / s.t2)).toFixed(1)}% retained). TE near a tissue's T2 separates tissues; TE ≪ T2 gives little T2 contrast.`;
+  }
+  if (q !== "bssfp" && q !== "fse") info += ' · <span data-spd="t2"></span>';
+  $("t2Info").innerHTML = info;
+  $("h2t").innerHTML =
+    q === "bssfp"
+      ? "Transverse decay over one TR"
+      : q === "gre" || q === "epi"
+        ? "T2* decay  M<sub>xy</sub>(t)"
+        : q === "fse"
+          ? "T2 decay: echo train (EPG)"
+          : "T2 decay  M<sub>xy</sub>(t)";
+  setSpeedText();
+  return plot(g, w, h, o);
+}
+function drawT2() {
+  const r = layer($("cT2"), "t2", buildT2);
+  if (!r) return;
+  plotCursor(r.g, r.view, CLK.t2, "t = " + fmt(CLK.t2) + " ms", 1);
+}
+function buildSeq(g, w, h) {
+  const Lm = 40,
+    pw = w - 48,
+    s = tissues()[S.tissue],
+    M = seqModel(),
+    tl = M.tl,
+    A = M.ax,
+    { m, st, k, gap } = A,
+    ax = (t) => Lm + A.at(t);
+  g.clearRect(0, 0, w, h);
+  g.font = "11px system-ui";
+  const y0 = 50,
+    lh = (h - y0 - 6) / 5,
+    yc = (i) => y0 + lh * (i + 0.5),
+    Amp = lh * 0.4;
+  g.textAlign = "left";
+  ["RF", "Gss", "Gpe", "Gro", "Signal"].forEach((n, i) => {
+    g.strokeStyle = "rgba(255,255,255,.14)";
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(Lm, yc(i));
+    g.lineTo(w - 8, yc(i));
+    g.stroke();
+    g.fillStyle = "#b4c0d0";
+    g.fillText(n, 4, yc(i) + 4);
+  });
+  for (let i = 1; i < m.length; i++) {
+    const bx = Lm + st[i] - gap / 2;
+    g.strokeStyle = "#ffb454";
+    for (let j = 0; j < 5; j++) {
+      g.beginPath();
+      g.moveTo(bx - 4, yc(j) + 5);
+      g.lineTo(bx, yc(j) - 5);
+      g.moveTo(bx, yc(j) + 5);
+      g.lineTo(bx + 4, yc(j) - 5);
+      g.stroke();
+    }
+  }
+  const col = { exc: "#5cc8ff", ref: "#ff7bd0", inv: "#ff7bd0" };
+  tl.rf.forEach((r) => {
+    const x = ax(r.t),
+      hx = Math.max((ax(r.t + r.hw) - ax(r.t - r.hw)) / 2, 1.5),
+      ht = (Amp * r.h) / 64;
+    g.fillStyle = col[r.kind];
+    g.fillRect(x - hx, yc(0) - ht, 2 * hx, ht);
+    if (r.label) {
+      g.fillStyle = "#eef3f9";
+      g.textAlign = "center";
+      g.fillText(r.label, x, yc(0) + (r.label.includes("×") ? 25 : 13));
+    }
+  });
+  const lobe = (a, b, y, amp, c, step) => {
+    let x1 = ax(a),
+      x2 = ax(b);
+    if (x2 - x1 < 1.2) x2 = x1 + 1.2;
+    const r = Math.min((x2 - x1) * 0.2, 4);
+    g.beginPath();
+    g.moveTo(x1, y);
+    g.lineTo(x1 + r, y - amp);
+    g.lineTo(x2 - r, y - amp);
+    g.lineTo(x2, y);
+    g.closePath();
+    g.globalAlpha = 0.4;
+    g.fillStyle = c;
+    g.fill();
+    g.globalAlpha = 1;
+    g.strokeStyle = c;
+    g.lineWidth = 1;
+    g.stroke();
+    if (step) {
+      g.globalAlpha = 0.45;
+      [-1, -0.66, -0.33, 0.33, 0.66, 1].forEach((f) => {
+        g.beginPath();
+        g.moveTo(x1 + r, y - amp * f);
+        g.lineTo(x2 - r, y - amp * f);
+        g.stroke();
+      });
+      g.globalAlpha = 1;
+    }
+  };
+  [
+    [tl.gz, 1, "#7bd88f"],
+    [tl.gy, 2, "#c9a0ff"],
+    [tl.gx, 3, "#ff9e7b"],
+  ].forEach(([arr, lane, c]) => arr.forEach((l) => lobe(l.a, l.b, yc(lane), Amp * l.h, c, l.step)));
+  tl.adc.forEach((d) => {
+    g.fillStyle = "#7bd88f";
+    g.fillRect(ax(d.a), yc(4) + Amp * 0.8, Math.max(ax(d.b) - ax(d.a), 1.5), 3);
+  });
+  const amp = Amp * 0.9;
+  g.strokeStyle = s.c;
+  g.lineWidth = 2;
+  m.forEach((sg, i) => {
+    const n = Math.max(80, Math.round((sg[1] - sg[0]) * k * 1.5)),
+      dt = (sg[1] - sg[0]) / n,
+      ys = new Float64Array(n + 1);
+    tl.ex.forEach((e) => {
+      for (let j = 0; j <= n; j++) {
+        const t = sg[0] + j * dt;
+        if (t >= e && t < e + 5 * tl.fw) ys[j] += Math.exp(-(t - e) / tl.fw);
+      }
+    });
+    tl.echoes.forEach((ec, ei) => {
+      const e = ec.t;
+      if (e < sg[0] - 4 * tl.sw || e > sg[1] + 4 * tl.sw) return;
+      const a = tl.rel[ei],
+        j0 = Math.max(0, Math.floor((e - 4 * tl.sw - sg[0]) / dt)),
+        j1 = Math.min(n, Math.ceil((e + 4 * tl.sw - sg[0]) / dt));
+      for (let j = j0; j <= j1; j++) ys[j] += a * Math.exp(-Math.pow((sg[0] + j * dt - e) / tl.sw, 2));
+    });
+    g.beginPath();
+    for (let j = 0; j <= n; j++) {
+      const px = Lm + st[i] + j * dt * k,
+        py = yc(4) - amp * Math.min(ys[j], 1.05);
+      j ? g.lineTo(px, py) : g.moveTo(px, py);
+    }
+    g.stroke();
+  });
+  tl.br.forEach(([a, b, l], i) => {
+    const y = 12 + i * 14,
+      x1 = ax(a),
+      x2 = ax(b);
+    g.strokeStyle = g.fillStyle = "#ffb454";
+    g.lineWidth = 1;
+    g.beginPath();
+    g.moveTo(x1, y);
+    g.lineTo(x2, y);
+    g.moveTo(x1, y - 3);
+    g.lineTo(x1, y + 3);
+    g.moveTo(x2, y - 3);
+    g.lineTo(x2, y + 3);
+    g.stroke();
+    g.textAlign = "left";
+    g.fillText(l, Math.min(x2 + 4, w - 150), y + 4);
+  });
+  // static text under the diagram (no per-frame DOM updates)
+  const mid = tl.echoes[Math.max(0, Math.min(tl.echoes.length - 1, tl.centre))],
+    pc = Math.round(100 * tl.rel[Math.max(0, Math.min(tl.rel.length - 1, tl.centre))]),
+    ai = acquisitionInfo(acq()),
+    timing = ` Timing (from the same model that validates the parameters): ADC from ${fmt(ai.adcStart)} to ${fmt(ai.adcEnd)} ms; last event of the TR is "${ai.lastName}" ending at ${fmt(ai.lastEnd)} ms; the next excitation block starts at ${fmt(ai.nextStart)} ms, ${fmt(ai.slack)} ms later (guard ${MRI.TIMING_GUARD_MS} ms).`;
+  let txt;
+  if (S.seq === "gre" || S.seq === "epi") {
+    const sTE = seqSignal(S.seq, s.pd, s.t1, s.t2, acq());
+    txt = `${s.n}: Mz immediately before RF = ${tl.mzPre.toFixed(3)}; Mxy immediately after excitation = ${tl.A.toFixed(3)}; signal at TE = ${sTE.toFixed(3)} (TE ${S.te} ms). The k-space-centre echo retains ${pc}% of Mxy(0). TR = ${S.tr} ms.`;
+  } else if (S.seq === "bssfp") {
+    txt = `${s.n}: steady-state signal at TE = TR/2 = ${(S.tr / 2).toFixed(2)} ms is ${tl.A.toFixed(3)}. This is the balanced steady-state sample, not a free T2-decay curve. TR = ${S.tr} ms.`;
+  } else if (S.seq === "fse") {
+    txt = `${s.n}: Mxy immediately after excitation ∝ ${tl.A.toFixed(3)}; selected k-space-centre echo ${S.echoIndex}/${S.etl} occurs at TEeff = ${S.te} ms and has ${pc}% of the amplitude of the excitation (echo heights are the EPG amplitudes). TR = ${S.tr} ms.`;
+  } else {
+    txt = `${s.n}: transverse signal immediately after excitation ∝ ${tl.A.toFixed(3)}; echo at TE = ${S.te} ms retains ${pc}% of that amplitude. TR = ${S.tr} ms.`;
+  }
+  void mid;
+  $("seqInfo").textContent = txt + timing;
+  return { Lm, pw };
+}
+function drawSeq() {
+  const r = layer($("cSeq"), "seq", buildSeq);
+  if (!r) return;
+  const M = seqModel(),
+    Lm = 40,
+    pw = r.w - 48,
+    g = r.g,
+    cx = Lm + M.ax.px(CLK.t),
+    right = cx > Lm + pw * 0.75;
+  g.strokeStyle = "#fff";
+  g.lineWidth = 1;
+  g.setLineDash([4, 3]);
+  g.beginPath();
+  g.moveTo(cx, 38);
+  g.lineTo(cx, r.h - 4);
+  g.stroke();
+  g.setLineDash([]);
+  g.fillStyle = "#fff";
+  g.font = "11px system-ui";
+  g.textAlign = right ? "right" : "left";
+  g.fillText("t = " + fmt(Math.max(0, CLK.t)) + " ms", cx + (right ? -4 : 4), 47);
+}
+// Phantom: one square coordinate system (side = min(w, h)); drawing, hit testing, hover and highlight share MRI.PHANTOM.
+function phantom(c, p) {
+  c._p = p;
+  const f = fit(c, true);
+  if (!f) return;
+  const { g, w, h } = f,
+    side = Math.min(w, h),
+    ox = (w - side) / 2,
+    oy = (h - side) / 2,
+    PX = (u) => ox + u * side,
+    PY = (v) => oy + v * side,
+    P = MRI.PHANTOM;
+  STAT.phantomDraws++;
+  g.clearRect(0, 0, w, h);
+  const sg = sigs(p),
+    m = Math.max(...sg.map((x) => x.s), 1e-9),
+    col = {};
+  sg.forEach((x) => {
+    const v = Math.round((255 * x.s) / m);
+    col[x.k] = `rgb(${v},${v},${v})`;
+  });
+  g.fillStyle = "#000";
+  g.fillRect(ox, oy, side, side);
+  const ell = (r, fill) => {
+    g.beginPath();
+    g.ellipse(PX(P.cx), PY(P.cy), r.rx * side, r.ry * side, 0, 0, 2 * Math.PI);
+    fill ? g.fill() : g.stroke();
+  };
+  P.rings.forEach((r) => {
+    g.fillStyle = col[r.k];
+    ell(r, true);
+  });
+  const mk = P.marker,
+    circle = (fill) => {
+      g.beginPath();
+      g.arc(PX(mk.x), PY(mk.y), mk.r * side, 0, 2 * Math.PI);
+      fill ? g.fill() : g.stroke();
+    };
+  g.fillStyle = col.cu;
+  circle(true);
+  g.fillStyle = "#a3b0c0";
+  g.font = "11px system-ui";
+  g.textAlign = "center";
+  g.fillText("custom", PX(mk.x), PY(0.98));
+  const lum = (s) => +s.match(/\d+/)[0] / 255;
+  if (side > 200) {
+    const fs = Math.max(9, Math.round(side * 0.03));
+    g.font = fs + "px system-ui";
+    g.textAlign = "center";
+    [
+      ["fat", 0.375, "Fat"],
+      ["csf", 0.325, "CSF"],
+      ["gm", 0.25, "GM"],
+    ].forEach(([k, off, l]) => {
+      g.fillStyle = lum(col[k]) > 0.5 ? "#000" : "#fff";
+      g.fillText(l, PX(P.cx), PY(P.cy - off) + fs * 0.35);
+    });
+    g.fillStyle = lum(col.wm) > 0.5 ? "#000" : "#fff";
+    g.fillText("WM", PX(P.cx), PY(P.cy) + fs * 0.35);
+  }
+  g.fillStyle = "#ff5";
+  g.font = "11px system-ui";
+  g.textAlign = "left";
+  g.fillText(SEQ[p.seq].n.split(" (")[0], ox + 6, oy + 12);
+  // outline of a tissue (rings are outlined on both edges): the selected tissue (bold white) and the hovered one (thin)
+  const outline = (k, lw, style, glow) => {
+    g.save();
+    g.lineWidth = lw;
+    g.strokeStyle = style;
+    if (glow) {
+      g.shadowColor = TISSUES[k].c;
+      g.shadowBlur = side * 0.03;
+    }
+    if (k === "cu") circle(false);
+    else {
+      const i = P.rings.findIndex((r) => r.k === k);
+      if (i >= 0) {
+        ell(P.rings[i], false);
+        if (P.rings[i + 1]) ell(P.rings[i + 1], false);
+      }
+    }
+    g.restore();
+  };
+  if (S.hover && S.hover !== S.tissue) outline(S.hover, Math.max(1.5, side * 0.004), "rgba(255,255,255,.7)", false);
+  outline(S.tissue, Math.max(2.5, side * 0.007), "#fff", true);
+}
+function drawTable() {
+  const a = sigs(acq()),
+    o = [...a].sort((x, y) => y.s - x.s),
+    mx = o[0].s || 1e-9,
+    rank = (k) => o.findIndex((x) => x.k === k) + 1;
+  $("sigTable").innerHTML =
+    `<table><thead><tr><th scope="col">Tissue</th><th scope="col">Signal</th><th scope="col">% of max</th><th scope="col">Rank</th></tr></thead><tbody>${a.map((x) => `<tr data-k="${x.k}"${x.k === S.tissue ? ' class="hl"' : ""}><td><button type="button" class="tissue-select" data-k="${x.k}" aria-pressed="${x.k === S.tissue}" title="Highlight ${x.n}"><span class="sw" aria-hidden="true" style="background:${x.c}"></span>${x.n}</button></td><td>${x.s.toFixed(3)}</td><td><span class="bar"><i style="width:${((100 * x.s) / mx).toFixed(0)}%;background:${x.c}"></i></span>${((100 * x.s) / mx).toFixed(0)}%</td><td>${rank(x.k)}</td></tr>`).join("")}</tbody></table><p class="note">Rank 1 = brightest. Signals are relative (ρ = 1 reference): compare them only within the same sequence model. The highlighted row is the tissue drawn in bold in the plots and used in the timing diagram.</p>`;
+}
+function buildTissTbl() {
+  const T = tissues();
+  const t1cell = (k) =>
+    T[k].t1src
+      ? `${T[k].t1} ± ${T[k].t1sd} <small>(${REFS[T[k].t1src]})</small>`
+      : `${T[k].t1} <small>(${k === "cu" ? "user-defined" : "illustrative"})</small>`;
+  $("tissTbl").innerHTML =
+    '<thead><tr><th scope="col">Tissue</th><th scope="col">T1 (ms)</th><th scope="col">T2 (ms)</th><th scope="col">ρ (rel.)</th></tr></thead><tbody>' +
+    Object.keys(T)
+      .map(
+        (k) =>
+          `<tr><td><span class="sw" style="background:${T[k].c}"></span>${T[k].n}</td><td>${t1cell(k)}</td><td>${T[k].t2} <small>(${k === "cu" ? "user-defined" : "illustrative, unverified"})</small></td><td>${T[k].pd.toFixed(2)} <small>(${k === "cu" ? "user-defined" : "illustrative"})</small></td></tr>`,
+      )
+      .join("") +
+    "</tbody>";
+}
+// ---- state change: everything is recomputed and redrawn once ----
+function update() {
+  VER++;
+  syncInputs();
+  updatePauseButton();
+  SEQ_IDS.forEach((k) => $("sq_" + k).setAttribute("aria-pressed", k === S.seq));
+  [...$("fieldBtns").children].forEach((b) => b.setAttribute("aria-pressed", b.dataset.f === S.field));
+  $("seqBrief").textContent = BRIEF[S.seq];
+  [...$("presetBtns").children].forEach((b, i) => b.setAttribute("aria-pressed", i === S.pi));
+  $("eqBox").innerHTML =
+    `<h3>${SEQ[S.seq].n}</h3><div class="math">${SEQ[S.seq].eq}</div><p>${SEQ[S.seq].note}</p>${["se", "fse", "ir"].includes(S.seq) ? MODEL_NOTE : ""}${TIMING_NOTE}`;
+  setFill($("speed"));
+  $("minBtn").setAttribute("aria-expanded", !S.min);
+  $("minBtn").title = S.min ? "Show the controls (drag to move)" : "Minimise the controls";
+  $("minBtn").setAttribute("aria-label", S.min ? "Show the controls" : "Minimise the controls");
+  $("minBtn").innerHTML = S.min ? ICON.sliders : ICON.minus;
+  buildTissTbl();
+  writeHash();
+  draw();
+  drawTable();
+  layout();
+  startAnimation();
+}
+function draw() {
+  clock();
+  phantom($("phA"), acq());
+  drawT1();
+  drawT2();
+  drawSeq();
+}
+// ---- animation: one loop, suspended when paused or when the document is hidden ----
+let raf = 0,
+  last = 0;
+function frame(now) {
+  raf = 0;
+  if (S.paused || document.hidden) return;
+  const dt = Math.min(now - last, 100);
+  last = now;
+  S.phase = (S.phase + (dt / 6000) * S.speed) % 1;
+  STAT.frames++;
+  clock();
+  drawT1();
+  drawT2();
+  drawSeq();
+  raf = requestAnimationFrame(frame);
+}
+function startAnimation() {
+  if (S.paused || document.hidden || raf) return;
+  last = performance.now(); // no jump after pauses or tab switches
+  raf = requestAnimationFrame(frame);
+}
+function stopAnimation() {
+  if (raf) cancelAnimationFrame(raf);
+  raf = 0;
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) stopAnimation();
+  else {
+    draw();
+    startAnimation();
+  }
+});
+if (RMQ && RMQ.addEventListener)
+  RMQ.addEventListener("change", () => {
+    if (RMQ.matches && !S.paused) {
+      S.paused = true;
+      stopAnimation();
+      updatePauseButton();
+    }
+  });
+// redraw (coalesced) after resizes and device-pixel-ratio changes
+let drawQueued = false;
+function scheduleDraw() {
+  if (drawQueued) return;
+  drawQueued = true;
+  requestAnimationFrame(() => {
+    drawQueued = false;
+    layout();
+    draw();
+  });
+}
+function watchDpr() {
+  if (!window.matchMedia) return;
+  const mq = matchMedia(`(resolution: ${window.devicePixelRatio || 1}dppx)`);
+  const on = () => {
+    scheduleDraw();
+    watchDpr();
+  };
+  mq.addEventListener ? mq.addEventListener("change", on, { once: true }) : mq.addListener(on);
+}
+// ---- phantom interaction ----
+function tissueAt(c, ev) {
+  const r = c.getBoundingClientRect(),
+    side = Math.min(r.width, r.height),
+    u = (ev.clientX - r.left - (r.width - side) / 2) / side,
+    v = (ev.clientY - r.top - (r.height - side) / 2) / side;
+  return MRI.phantomHit(u, v);
+}
+$("phA").addEventListener("click", (ev) => {
+  const k = tissueAt($("phA"), ev);
+  if (k) {
+    S.tissue = k;
+    update();
+  }
+});
+$("sigTable").addEventListener("click", (e) => {
+  const r = e.target.closest("tr[data-k]");
+  if (r) {
+    S.tissue = r.dataset.k;
+    update();
+    if (e.target.closest("button[data-k]")) $("sigTable").querySelector(`button[data-k="${S.tissue}"]`).focus();
+  }
+});
+{
+  const c = $("phA");
+  c.addEventListener("pointermove", (ev) => {
+    const k = c._p && tissueAt(c, ev);
+    if ((k || null) !== S.hover) {
+      S.hover = k || null;
+      phantom(c, c._p);
+      if (!k) c.title = "";
+    }
+    if (!k) return;
+    const T = tissues()[k],
+      t = `${T.n}: T1 ${T.t1} ms, T2 ${T.t2} ms, ρ ${T.pd.toFixed(2)}, S = ${seqSignal(c._p.seq, T.pd, T.t1, T.t2, c._p).toFixed(3)}`;
+    if (c.title !== t) c.title = t;
+  });
+  c.addEventListener("pointerleave", () => {
+    if (S.hover) {
+      S.hover = null;
+      phantom(c, c._p);
+    }
+    c.title = "";
+  });
+}
+// ---- URL hash ----
+function readHash() {
+  try {
+    const q = new URLSearchParams(location.hash.slice(1)),
+      sq = q.get("seq");
+    if (!Object.prototype.hasOwnProperty.call(SEQ, sq)) return;
+    const c = { ...S, seq: sq };
+    const keys = KEYS.filter((k) => !(sq === "fse" && k === "te"));
+    keys.forEach((k) => {
+      if (q.has(k)) {
+        const v = +q.get(k),
+          r = rng(k, sq, c);
+        if (Number.isFinite(v) && v >= r.min && v <= r.max) c[k] = v;
+      }
+    });
+    if (sq === "fse") {
+      let echoIndex = q.has("echo") ? Number(q.get("echo")) : q.has("te") ? Math.round(Number(q.get("te")) / c.esp) : 1;
+      if (!Number.isInteger(echoIndex) || echoIndex < 1 || echoIndex > c.etl) return;
+      if (q.has("te")) {
+        const hashTE = Number(q.get("te"));
+        if (!Number.isFinite(hashTE) || hashTE < c.esp - 1e-9 || hashTE > c.etl * c.esp + 1e-9) return;
+        if (q.has("echo") && Math.abs(hashTE - fseEchoTime(echoIndex, c.esp, c.etl)) > 1e-8) return;
+      }
+      c.echoIndex = echoIndex;
+      c.te = fseEchoTime(echoIndex, c.esp, c.etl);
+    } else if (q.has("te")) {
+      const v = Number(q.get("te")),
+        r = rng("te", sq, c);
+      if (Number.isFinite(v) && v >= r.min && v <= r.max) c.te = v;
+    }
+    if (!check(c)) {
+      Object.assign(S, c);
+      S.pi = null;
+      const field = q.get("field"),
+        tissue = q.get("tissue");
+      if (Object.prototype.hasOwnProperty.call(FIELD, field)) S.field = field;
+      if (Object.prototype.hasOwnProperty.call(TISSUES, tissue)) S.tissue = tissue;
+    }
+  } catch (e) {}
+}
+function writeHash() {
+  try {
+    const q = new URLSearchParams({ seq: S.seq, field: S.field, tissue: S.tissue });
+    vis().forEach((k) => q.set(k, S[k]));
+    if (S.seq === "fse") q.set("echo", S.echoIndex);
+    history.replaceState(null, "", "#" + q);
+  } catch (e) {}
+}
+function onResize() {
+  if (innerWidth < 1024 && !S.min) {
+    S.min = true;
+    update();
+    return;
+  }
+  scheduleDraw();
+}
+addEventListener("resize", onResize);
+if (window.ResizeObserver) {
+  const ro = new ResizeObserver(() => scheduleDraw());
+  ["phA", "cT1", "cT2", "cSeq"].forEach((id) => ro.observe($(id)));
+}
+// small, documented hook for the automated browser tests (read-only use)
+window.MRISim = { state: S, stats: STAT, MRI, update, draw, clock, layers: LAYERS, tissues };
+watchDpr();
+layout();
+readHash();
+buildPresetBtns();
+update();
+
+    </script>
+  </body>
+</html>
